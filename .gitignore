@@ -1,9 +1,4 @@
-# Remove idea folder
-.idea/*
-.idea
-
-# Ignore JetBrains IDE project files (IntelliJ, PyCharm, etc.)
-# Keep a single, clear rule so .idea is ignored by Git
+# Ignore JetBrains IDE project files
 .idea/
 
 # Byte-compiled / optimized / DLL files
