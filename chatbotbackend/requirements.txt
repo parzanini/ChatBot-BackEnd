@@ -1,0 +1,7 @@
+#Django
+Django
+
+#MongoDB
+mongoengine
+pymongo
+dnspython
