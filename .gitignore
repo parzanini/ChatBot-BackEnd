@@ -1,3 +1,11 @@
+# Remove idea folder
+.idea/*
+.idea
+
+# Ignore JetBrains IDE project files (IntelliJ, PyCharm, etc.)
+# Keep a single, clear rule so .idea is ignored by Git
+.idea/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -205,3 +213,4 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+/.idea/
