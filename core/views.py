@@ -7,7 +7,6 @@ This file contains the following endpoints:
 
 """
 import json
-import logging
 import os
 import tempfile
 import time
@@ -18,6 +17,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from mongoengine.connection import get_db
 
+from core import config
 
 # Create your views here.
 
@@ -45,7 +45,7 @@ def ask(request):
     Returns:
         JSON with the answer and source documents
     """
-    # Remember when we started (for timing)
+    # Remember when time started
     start_time = time.time()
 
     # STEP 1: Parse the JSON body
@@ -55,9 +55,46 @@ def ask(request):
         request_body = request.body.decode("utf-8")
 
         # Parse it as JSON (convert text to Python dictionary)
-        payload = json.loads(request_body)
+        user_request = json.loads(request_body)
 
     except Exception:
         # The JSON was invalid (malformed, not JSON, etc.)
         error_message = "Invalid JSON body. The correct format is: {\"query\": \"your question here\"}"
         return JsonResponse({"error": error_message}, status=400)
+
+    # STEP 2: Get the user's question from the JSON
+    user_query = user_request.get("query")
+
+    # Remove spaces from beginning and end
+    user_query = user_query.strip()
+
+    # STEP 3: Gather information about the query (Admin only)
+
+    debug_info = {
+        "query": user_query,
+        "collection": COLLECTION,
+        "vector_index": VECTOR_INDEX_NAME,
+        "min_vector_score": MIN_VECTOR_SCORE,
+        "matches": 0,
+        "index_names": [],
+        "total_docs": None,
+        "embedding_time_ms": None,
+        "vector_time_ms": None,
+        "candidate_count": 0,
+        "similarities": [],
+        "chunk_titles": [],
+        "low_score_filtered": False,
+        "top_score": None
+    }
+
+    # STEP 4: Connect to MongoDB database
+    try:
+        # Get database connection (configured in Django settings)
+        database = get_db()
+
+    except Exception as error:
+        # Connection failed!
+        error_message = f"MongoDB connection failed: {error}"
+        return JsonResponse({"error": error_message}, status=500)
+
+
