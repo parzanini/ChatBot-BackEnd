@@ -5,3 +5,10 @@ Django
 mongoengine
 pymongo
 dnspython
+
+# Web server (Render start command uses gunicorn)
+gunicorn
+
+
+# Gemini API
+google-generativeai
