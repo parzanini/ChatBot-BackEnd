@@ -24,6 +24,14 @@ from core import config
 # Set up Google's AI once when the server starts
 genai.configure(api_key=config.GEMINI_API_KEY)
 
+# Load settings from config file (easier to change in one place)
+MODEL_NAME = config.GEMINI_MODEL
+COLLECTION = config.MONGODB_COLLECTION
+VECTOR_INDEX_NAME = config.VECTOR_INDEX_NAME
+VECTOR_LIMIT = config.VECTOR_LIMIT
+VECTOR_NUM_CANDIDATES = config.VECTOR_NUM_CANDIDATES
+MIN_VECTOR_SCORE = config.MIN_VECTOR_SCORE
+
 
 @csrf_exempt  # Allow API requests without CSRF token
 @require_POST  # Only accept POST requests
@@ -97,4 +105,35 @@ def ask(request):
         error_message = f"MongoDB connection failed: {error}"
         return JsonResponse({"error": error_message}, status=500)
 
+    # STEP 5: Make sure the collection exists
+    # Get list of all collection names in the database
+    collection_names = database.list_collection_names()
 
+    # Check if our collection is in the list
+    if COLLECTION not in collection_names:
+        error_message = f"Collection '{COLLECTION}' not found."
+        return JsonResponse({"error": error_message}, status=404)
+
+    # Get the collection
+    collection = database[COLLECTION]
+
+    # STEP 6: Get some stats about the collection (For admin info)
+    try:
+        # Count how many documents are in the collection
+        debug_info["total_docs"] = collection.estimated_document_count()
+
+        # Get list of indexes
+        all_indexes = list(collection.list_indexes())
+        index_names = []
+        for index in all_indexes:
+            name = index.get("name")
+            if name:
+                index_names.append(name)
+        debug_info["index_names"] = index_names
+
+    except Exception as error:
+        # If this fails,
+        error_message = f"Failed to get collection stats: {error}"
+        return JsonResponse({"error": error_message}, status=500)
+
+    # STEP 7: Convert the question to an embedding
