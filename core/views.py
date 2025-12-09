@@ -18,6 +18,7 @@ from django.views.decorators.http import require_POST
 from mongoengine.connection import get_db
 
 from core import config
+from core.embedding_service import EmbeddingService
 
 # Create your views here.
 
@@ -137,3 +138,35 @@ def ask(request):
         return JsonResponse({"error": error_message}, status=500)
 
     # STEP 7: Convert the question to an embedding
+    try:
+        # Remember start time
+        embed_start_time = time.time()
+
+        # Call Google's AI to convert the question to numbers
+        embedding_result = genai.embed_content(
+            model=config.EMBEDDING_MODEL,
+            content=user_query,
+            task_type="retrieval_query"
+        )
+
+        # Get the embedding from the result
+        raw_embedding = embedding_result['embedding']
+
+        # Normalize it (make it length 1)
+        query_embedding = EmbeddingService.normalize_vector(raw_embedding)
+
+        # Calculate how long it took (in milliseconds)
+        embed_end_time = time.time()
+        embed_duration_seconds = embed_end_time - embed_start_time
+        embed_duration_ms = int(round(embed_duration_seconds * 1000))
+        debug_info["embedding_time_ms"] = embed_duration_ms
+
+    except Exception as error:
+        # Embedding generation failed!
+        error_message = f"Embedding generation failed: {error}"
+        return JsonResponse({"error": error_message}, status=502)
+
+    # STEP 8: Search for similar chunks in the database
+    # Remember start time
+    search_start_time = time.time()
+
