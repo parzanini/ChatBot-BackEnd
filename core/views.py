@@ -7,8 +7,6 @@ This file contains the following endpoints:
 
 """
 import json
-import os
-import tempfile
 import time
 
 import google.generativeai as genai
@@ -18,7 +16,8 @@ from django.views.decorators.http import require_POST
 from mongoengine.connection import get_db
 
 from core import config
-from core.embedding_service import EmbeddingService
+from core.services.embedding_service import EmbeddingService
+from core.services.vector_search_service import VectorSearchService
 
 # Create your views here.
 
@@ -170,3 +169,24 @@ def ask(request):
     # Remember start time
     search_start_time = time.time()
 
+    # Create a search service
+    search_service = VectorSearchService(
+        collection=collection,
+        vector_index_name=VECTOR_INDEX_NAME,
+        vector_limit=VECTOR_LIMIT,
+        num_candidates=VECTOR_NUM_CANDIDATES,
+        min_score=MIN_VECTOR_SCORE
+    )
+
+    try:
+        # Search for similar documents
+        matching_docs = search_service.search(query_embedding)
+
+        # Calculate how long it took
+        search_end_time = time.time()
+        search_duration_seconds = search_end_time - search_start_time
+        search_duration_ms = int(round(search_duration_seconds * 1000))
+        debug_info["vector_time_ms"] = search_duration_ms
+
+        # Save debug info
+        debug_info["candidate_count"] = len(matching_docs)
