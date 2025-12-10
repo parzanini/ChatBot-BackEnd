@@ -87,3 +87,18 @@ class VectorSearchService:
         ]
         # STEP 2: Run the search in MongoDB
         search_results = self.collection.aggregate(pipeline)
+
+        # Convert results to a list
+        docs = list(search_results)
+
+        # STEP 3: Check if top result has a good enough score
+        if len(docs) > 0:
+            # Get the top result's score
+            top_score = float(docs[0].get("score", 0.0))
+
+            # Is it below our minimum? return empty list
+            if top_score < self.min_score:
+                return []
+
+        # STEP 4: Return the results
+        return docs

@@ -190,3 +190,47 @@ def ask(request):
 
         # Save debug info
         debug_info["candidate_count"] = len(matching_docs)
+
+        # Get similarity scores for each document
+        similarity_scores = []
+        for doc in matching_docs:
+            score = doc.get("score", 0.0)
+            score_rounded = round(float(score), 4)
+            similarity_scores.append(score_rounded)
+        debug_info["similarities"] = similarity_scores
+
+        # Get the top score (if we have results)
+        if len(matching_docs) > 0:
+            top_doc = matching_docs[0]
+            top_score = top_doc.get("score", 0.0)
+            debug_info["top_score"] = round(float(top_score), 4)
+
+        # Check if we filtered out results due to low scores
+        if len(matching_docs) == 0:
+            debug_info["low_score_filtered"] = True
+
+    except Exception as error:
+        # Search failed!
+        error_message = f"Vector search failed: {error}"
+        return JsonResponse({"error": error_message}, status=500)
+
+    # STEP 9: Build context from the search results
+    # We'll send this context to the AI along with the question
+    context_chunks = []
+    sources = []
+
+    for document in matching_docs:
+        # Get the text and title from this document
+        text = document.get("text")
+        title = document.get("title")
+
+        # Use empty string if missing
+        if not text:
+            text = ""
+        if not title:
+            title = ""
+
+        # Only include documents that have text
+        if text:
+            # Limit text to 800 characters to keep it reasonable
+            text_excerpt = text[:800]
