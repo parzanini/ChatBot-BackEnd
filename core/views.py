@@ -78,7 +78,7 @@ def ask(request):
 
     # STEP 3: Gather information about the query (Admin only)
 
-    debug_info = {
+    adm_info = {
         "query": user_query,
         "collection": COLLECTION,
         "vector_index": VECTOR_INDEX_NAME,
@@ -120,7 +120,7 @@ def ask(request):
     # STEP 6: Get some stats about the collection (For admin info)
     try:
         # Count how many documents are in the collection
-        debug_info["total_docs"] = collection.estimated_document_count()
+        adm_info["total_docs"] = collection.estimated_document_count()
 
         # Get list of indexes
         all_indexes = list(collection.list_indexes())
@@ -129,7 +129,7 @@ def ask(request):
             name = index.get("name")
             if name:
                 index_names.append(name)
-        debug_info["index_names"] = index_names
+        adm_info["index_names"] = index_names
 
     except Exception as error:
         # If this fails,
@@ -158,7 +158,7 @@ def ask(request):
         embed_end_time = time.time()
         embed_duration_seconds = embed_end_time - embed_start_time
         embed_duration_ms = int(round(embed_duration_seconds * 1000))
-        debug_info["embedding_time_ms"] = embed_duration_ms
+        adm_info["embedding_time_ms"] = embed_duration_ms
 
     except Exception as error:
         # Embedding generation failed!
@@ -186,10 +186,10 @@ def ask(request):
         search_end_time = time.time()
         search_duration_seconds = search_end_time - search_start_time
         search_duration_ms = int(round(search_duration_seconds * 1000))
-        debug_info["vector_time_ms"] = search_duration_ms
+        adm_info["vector_time_ms"] = search_duration_ms
 
         # Save debug info
-        debug_info["candidate_count"] = len(matching_docs)
+        adm_info["candidate_count"] = len(matching_docs)
 
         # Get similarity scores for each document
         similarity_scores = []
@@ -197,17 +197,17 @@ def ask(request):
             score = doc.get("score", 0.0)
             score_rounded = round(float(score), 4)
             similarity_scores.append(score_rounded)
-        debug_info["similarities"] = similarity_scores
+        adm_info["similarities"] = similarity_scores
 
         # Get the top score (if we have results)
         if len(matching_docs) > 0:
             top_doc = matching_docs[0]
             top_score = top_doc.get("score", 0.0)
-            debug_info["top_score"] = round(float(top_score), 4)
+            adm_info["top_score"] = round(float(top_score), 4)
 
         # Check if we filtered out results due to low scores
         if len(matching_docs) == 0:
-            debug_info["low_score_filtered"] = True
+            adm_info["low_score_filtered"] = True
 
     except Exception as error:
         # Search failed!
@@ -234,3 +234,96 @@ def ask(request):
         if text:
             # Limit text to 800 characters to keep it reasonable
             text_excerpt = text[:800]
+
+            # Format as "Title: ...\nText: ..."
+            formatted_chunk = f"Title: {title}\nText: {text_excerpt}"
+            context_chunks.append(formatted_chunk)
+
+            # Add to sources list (to return to user)
+            score = document.get("score", 0.0)
+            score_rounded = round(float(score), 4)
+            source_info = {
+                "title": title,
+                "score": score_rounded
+            }
+            sources.append(source_info)
+
+            # Add title to debug info
+            title_for_debug = title if title else "(untitled)"
+            adm_info["chunk_titles"].append(title_for_debug)
+
+    # Save number of matches
+    adm_info["matches"] = len(matching_docs)
+
+    # STEP 10: Check if we found any relevant documents
+    if len(matching_docs) == 0:
+        # Calculate total time
+        end_time = time.time()
+        total_seconds = end_time - start_time
+        total_ms = int(round(total_seconds * 1000))
+        adm_info["total_time_ms"] = total_ms
+
+        # Return "not found" response
+        response_data = {
+            "answer": "I could not find relevant information in the knowledge base.",
+            "sources": [],
+            "debug": adm_info
+        }
+
+        return JsonResponse(response_data, status=200)
+
+    # STEP 11: Combine all context chunks into one big string
+    # Join them with "---" separator
+    context = "\n\n---\n\n".join(context_chunks)
+
+    # STEP 12: Create a prompt for Google's AI
+    # This tells the AI what to do
+    prompt = f"""You are a helpful assistant. Use the provided context to answer the user's question.
+If the answer is not in the context, state that you do not have enough information.
+
+Question:
+{user_query}
+
+Context:
+{context}
+"""
+
+    # STEP 13: Ask Google's AI to generate an answer
+    try:
+        # Create AI model
+        ai_model = genai.GenerativeModel(MODEL_NAME)
+
+        # Generate answer
+        ai_response = ai_model.generate_content(prompt)
+
+        # Get the text from the response
+        if hasattr(ai_response, "text"):
+            answer_text = ai_response.text.strip()
+        else:
+            answer_text = ""
+
+        # Use default message if empty
+        if not answer_text:
+            answer_text = "No answer generated."
+
+    except Exception as error:
+        # AI call failed!
+        error_message = f"Gemini AI call failed: {error}"
+        return JsonResponse({"error": error_message}, status=502)
+
+    # STEP 14: Calculate total time and prepare response
+    end_time = time.time()
+    total_seconds = end_time - start_time
+    total_ms = int(round(total_seconds * 1000))
+    adm_info["total_time_ms"] = total_ms
+
+    # Create response
+    response_data = {
+        "answer": answer_text,
+        "sources": sources,
+        "debug": adm_info
+    }
+
+    # STEP 15: Return the response
+    return JsonResponse(response_data, status=200)
+
