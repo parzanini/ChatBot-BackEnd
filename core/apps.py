@@ -7,7 +7,7 @@ _mongo_connected = False
 
 class ChatbotappConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'chatbotapp'
+    name = 'chatbotbackend'
 
     def ready(self):
         """Connect to MongoDB using MongoEngine once at startup."""

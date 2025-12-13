@@ -9,6 +9,9 @@ dnspython
 # Web server (Render start command uses gunicorn)
 gunicorn
 
+# Environment variable loading
+python-dotenv
+
 
 # Gemini API
 google-generativeai
