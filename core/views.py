@@ -7,6 +7,7 @@ This file contains the following endpoints:
 
 """
 import json
+import tempfile
 import time
 
 import google.generativeai as genai
@@ -32,7 +33,7 @@ VECTOR_LIMIT = config.VECTOR_LIMIT
 VECTOR_NUM_CANDIDATES = config.VECTOR_NUM_CANDIDATES
 MIN_VECTOR_SCORE = config.MIN_VECTOR_SCORE
 
-
+# ------------------------------ Ask Endpoint ------------------------------ #
 @csrf_exempt  # Allow API requests without CSRF token
 @require_POST  # Only accept POST requests
 def ask(request):
@@ -327,3 +328,66 @@ Context:
     # STEP 15: Return the response
     return JsonResponse(response_data, status=200)
 
+# ------------------------------ PDF Upload Endpoint ------------------------------ #
+
+@csrf_exempt  # Allow requests without CSRF token (for APIs)
+@require_POST  # Only accept POST requests (not GET, PUT, etc.)
+def upload_pdf(request):
+    """
+    API Endpoint: Upload and process a PDF file.
+
+    What this does:
+    1. Receives a PDF file from the user
+    2. Saves it temporarily
+    3. Processes it (extract text, create chunks, generate embeddings)
+    4. Saves chunks to MongoDB
+    5. Returns success or error message
+
+    How to use (example):
+        POST /api/upload_pdf/
+        Form data:
+        - file: (the PDF file)
+        - source_name: "Student Handbook 2025" (optional)
+
+    Returns:
+        JSON with success status and number of chunks created
+    """
+    # Remember when we started (to calculate how long this takes)
+    start_time = time.time()
+
+    # STEP 1: Check if a file was uploaded
+    if 'file' not in request.FILES:
+        # No file found! Return error
+        return JsonResponse({
+            "error": "No file provided. Please upload a PDF file with key 'file'."
+        }, status=400)
+
+    # Get the uploaded file
+    pdf_file = request.FILES['file']
+
+    # STEP 2: Make sure it's a PDF file
+    # Get the filename and convert to lowercase
+    filename = pdf_file.name.lower()
+
+    # Check if it ends with .pdf
+    if not filename.endswith('.pdf'):
+        # Wrong file type! Return error
+        return JsonResponse({
+            "error": "Invalid file type. Only PDF files are accepted."
+        }, status=400)
+
+    # STEP 3: Get the source name (or use filename as default)
+    source_name = request.POST.get('source_name', '').strip()
+
+    # If no source name provided, use the filename
+    if not source_name:
+        source_name = pdf_file.name
+
+    # Variable to store temporary file path (so I can delete it later)
+    temp_file_path = None
+
+    try:
+        # STEP 4: Save the uploaded file temporarily
+        # We need to save it to disk before processing
+        # Use a temporary file that Django will clean up later
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
