@@ -388,6 +388,40 @@ def upload_pdf(request):
 
     try:
         # STEP 4: Save the uploaded file temporarily
-        # We need to save it to disk before processing
+        # Save it to disk before processing
         # Use a temporary file that Django will clean up later
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+
+    # Write the PDF data to the temporary file
+    # PDF files can be large, so we write in chunks
+    for data_chunk in pdf_file.chunks():
+        temp_file.write(data_chunk)
+
+    # Close the file and remember its path
+    temp_file.close()
+    temp_file_path = temp_file.name
+
+    # STEP 5: Process the PDF
+    # Create a PDF processor
+    processor = PDFProcessorService()
+
+    # Process the PDF (extract text, chunk, embed, save)
+    result = processor.process_pdf(temp_file_path, source_name)
+
+    # STEP 6: Delete the temporary file (we don't need it anymore)
+    os.unlink(temp_file_path)
+
+    # STEP 7: Calculate how long it took
+    end_time = time.time()
+    total_seconds = end_time - start_time
+    total_time = round(total_seconds, 2)
+
+    # STEP 8: Return success response
+    response_data = {
+        "success": True,
+        "message": "PDF processed successfully",
+        "chunks_created": result["chunks_created"],
+        "source_name": result["source_name"],
+        "processing_time_seconds": total_time
+    }
+    return JsonResponse(response_data, status=201)
