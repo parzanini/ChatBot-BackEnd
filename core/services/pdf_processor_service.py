@@ -1,3 +1,6 @@
+from core.services.embedding_service import EmbeddingService
+
+
 class PDFProcessorService:
     """
     This class processes PDF files for the chatbot.
@@ -47,3 +50,24 @@ class PDFProcessorService:
         """
         # List to store text from each page
         all_pages = []
+
+        # Open the PDF file
+        with pdfplumber.open(pdf_path) as pdf:
+            # Go through each page
+            for page in pdf.pages:
+                # Extract text from this page
+                page_text = page.extract_text()
+
+                # If page has no text, use empty string
+                if page_text is None:
+                    page_text = ''
+
+                # Remove extra spaces at beginning and end
+                page_text = page_text.strip()
+
+                # Add this page's text to list
+                all_pages.append(page_text)
+
+        # Join all pages with double newline between them
+        all_text = "\n\n".join(all_pages)
+        return all_text

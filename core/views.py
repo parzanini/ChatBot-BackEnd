@@ -7,6 +7,7 @@ This file contains the following endpoints:
 
 """
 import json
+import os
 import tempfile
 import time
 
@@ -18,6 +19,7 @@ from mongoengine.connection import get_db
 
 from core import config
 from core.services.embedding_service import EmbeddingService
+from core.services.pdf_processor_service import PDFProcessorService
 from core.services.vector_search_service import VectorSearchService
 
 # Create your views here.
@@ -392,36 +394,40 @@ def upload_pdf(request):
         # Use a temporary file that Django will clean up later
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
 
-    # Write the PDF data to the temporary file
-    # PDF files can be large, so we write in chunks
-    for data_chunk in pdf_file.chunks():
-        temp_file.write(data_chunk)
+        # Write the PDF data to the temporary file
+        # PDF files can be large, so we write in chunks
+        for data_chunk in pdf_file.chunks():
+            temp_file.write(data_chunk)
 
-    # Close the file and remember its path
-    temp_file.close()
-    temp_file_path = temp_file.name
+        # Close the file and remember its path
+        temp_file.close()
+        temp_file_path = temp_file.name
 
-    # STEP 5: Process the PDF
-    # Create a PDF processor
-    processor = PDFProcessorService()
+        # STEP 5: Process the PDF
+        # Create a PDF processor
+        processor = PDFProcessorService()
 
-    # Process the PDF (extract text, chunk, embed, save)
-    result = processor.process_pdf(temp_file_path, source_name)
+        # Process the PDF (extract text, chunk, embed, save)
+        result = processor.process_pdf(temp_file_path, source_name)
 
-    # STEP 6: Delete the temporary file (we don't need it anymore)
-    os.unlink(temp_file_path)
+        # STEP 6: Delete the temporary file (we don't need it anymore)
+        os.unlink(temp_file_path)
 
-    # STEP 7: Calculate how long it took
-    end_time = time.time()
-    total_seconds = end_time - start_time
-    total_time = round(total_seconds, 2)
+        # STEP 7: Calculate how long it took
+        end_time = time.time()
+        total_seconds = end_time - start_time
+        total_time = round(total_seconds, 2)
 
-    # STEP 8: Return success response
-    response_data = {
-        "success": True,
-        "message": "PDF processed successfully",
-        "chunks_created": result["chunks_created"],
-        "source_name": result["source_name"],
-        "processing_time_seconds": total_time
-    }
-    return JsonResponse(response_data, status=201)
+        # STEP 8: Return success response
+        response_data = {
+            "success": True,
+            "message": "PDF processed successfully",
+            "chunks_created": result["chunks_created"],
+            "source_name": result["source_name"],
+            "processing_time_seconds": total_time
+        }
+        return JsonResponse(response_data, status=201)
+
+    # Except block to catch errors during processing
+    except Exception as error:
+        return JsonResponse({"error": f"Failed to process PDF: {error}"}, status=500)
