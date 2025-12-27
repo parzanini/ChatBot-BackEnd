@@ -18,7 +18,7 @@ from django.views.decorators.http import require_POST
 from mongoengine.connection import get_db
 
 from core import config
-from core.services.embedding_service import EmbeddingService
+from core.services.embedding_service import EmbeddingService, normalize_vector
 from core.services.pdf_processor_service import PDFProcessorService
 from core.services.vector_search_service import VectorSearchService
 
@@ -155,7 +155,7 @@ def ask(request):
         raw_embedding = embedding_result['embedding']
 
         # Normalize it (make it length 1)
-        query_embedding = EmbeddingService.normalize_vector(raw_embedding)
+        query_embedding = normalize_vector(raw_embedding)
 
         # Calculate how long it took (in milliseconds)
         embed_end_time = time.time()
@@ -431,3 +431,31 @@ def upload_pdf(request):
     # Except block to catch errors during processing
     except Exception as error:
         return JsonResponse({"error": f"Failed to process PDF: {error}"}, status=500)
+
+# ------------------------------ URL Scrape Endpoint ------------------------------ #
+@csrf_exempt  # Allow API requests without CSRF token
+@require_POST  # Only accept POST requests
+def scrape_url(request):
+    """
+    API Endpoint: Scrape and process a web page.
+
+    What this does:
+    1. Receives a URL from the user
+    2. Downloads the web page
+    3. Extracts the main content (removes menus, ads, etc.)
+    4. Processes it (create chunks, generate embeddings)
+    5. Saves chunks to MongoDB
+    6. Returns success or error message
+
+    How to use (example):
+        POST /api/scrape_url/
+        JSON body: {
+            "url": "https://tus.ie/courses/",
+            "source_name": "TUS Courses"  (optional)
+        }
+
+    Returns:
+        JSON with success status and number of chunks created
+    """
+    # Remember time
+    start_time = time.time()
