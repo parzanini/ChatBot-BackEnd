@@ -1,4 +1,8 @@
+import pdfplumber
+
+from core.services.chunker_service import Chunker
 from core.services.embedding_service import EmbeddingService
+from core.services.knowledge_store_service import KnowledgeStore
 
 
 class PDFProcessorService:
@@ -136,3 +140,5 @@ class PDFProcessorService:
             "source_name": source_name
         }
         return result
+
+

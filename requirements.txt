@@ -12,6 +12,12 @@ gunicorn
 # Environment variable loading
 python-dotenv
 
+# PDF processing
+pdfplumber
+
+# Text splitting and chunking
+langchain-text-splitters
 
 # Gemini API
 google-generativeai
+

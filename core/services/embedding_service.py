@@ -195,6 +195,14 @@ class EmbeddingService:
         }
         return stats
 
+    @staticmethod
+    def normalize_vector(values):
+        """
+        This is a helper method to normalize a vector.It just calls the standalone function.
+        By doing this, I can call it as a method of the EmbeddingService class.
+        """
+        return normalize_vector(values)
+
 
 def normalize_vector(values):
     """

@@ -22,10 +22,19 @@ EMBEDDING_DIMENSIONS = 768
 # How many text chunks to process at once (bigger = faster but uses more memory)
 BATCH_SIZE = 32
 
+# ============================================================================
+# TEXT CHUNKING SETTINGS
+# ============================================================================
+# These settings control how we split long documents into smaller pieces
 
+# How many characters in each chunk (smaller = more chunks, larger = fewer chunks)
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "500"))
 
+# How many characters to overlap between chunks (helps maintain context)
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "50"))
 
-
+# What to split on (tries each separator in order)
+CHUNK_SEPARATORS = ["\n\n", "\n", ". ", " ", ""]
 
 # ============================================================================
 # MONGODB DATABASE SETTINGS
