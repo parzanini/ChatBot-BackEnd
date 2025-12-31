@@ -77,3 +77,40 @@ class KnowledgeStore:
                 }
 
         return 200, {"saved_count": saved_count}
+
+    def delete_by_source(self, source_type=None, source_name=None, source_url=None):
+        """
+        Delete all chunks from a specific source.
+
+        This is used to remove old chunks before saving new ones from the same source
+        (prevents duplicates and stale data).
+
+        Args:
+            source_type: Type of source ("pdf" or "website")
+            source_name: Name of the source (like "Student Handbook" or "TUS Homepage")
+            source_url: URL of the source (for websites)
+
+        Returns:
+            dict: {"deleted_count": number of chunks deleted}
+
+        Raises:
+            ValueError: If parameters are invalid
+        """
+        try:
+            if source_url:
+                # Delete by URL (for web scraping)
+                deleted = KnowledgeChunk.objects(sourceUrl=source_url).delete()
+            elif source_type and source_name:
+                # Delete by source type and name (for PDFs)
+                deleted = KnowledgeChunk.objects(
+                    sourceType=source_type,
+                    sourceName=source_name
+                ).delete()
+            else:
+                raise ValueError("Must provide either source_url or both source_type and source_name")
+
+            return {"deleted_count": deleted}
+        except Exception as error:
+            raise Exception(f"Failed to delete chunks: {str(error)}")
+
+

@@ -1,4 +1,5 @@
 import pdfplumber
+from concurrent.futures import (ThreadPoolExecutor, TimeoutError as FuturesTimeoutError)
 
 from core.services.chunker_service import Chunker
 from core.services.embedding_service import EmbeddingService
@@ -36,45 +37,68 @@ class PDFProcessorService:
         # Create a storage to save to database
         self.storage = KnowledgeStore()
 
-    def extract_text(self, pdf_path):
+    def extract_text(self, pdf_path, page_timeout=5):
         """
-        Read all the text from a PDF file.
+        Read all the text from a PDF file with timeout protection.
 
         Steps:
         1. Open the PDF
-        2. Go through each page
+        2. Go through each page with timeout protection
         3. Extract text from each page
         4. Join all pages together
 
         Args:
             pdf_path: The file path to the PDF (like "C:/documents/handbook.pdf")
+            page_timeout: Maximum seconds to spend extracting text from one page (default: 5)
 
         Returns:
             All the text from the PDF as one long string
+
+        Raises:
+            ValueError: If the PDF cannot be opened or processed
         """
         # List to store text from each page
         all_pages = []
 
-        # Open the PDF file
-        with pdfplumber.open(pdf_path) as pdf:
-            # Go through each page
-            for page in pdf.pages:
-                # Extract text from this page
-                page_text = page.extract_text()
+        try:
+            # Open the PDF file
+            with pdfplumber.open(pdf_path) as pdf:
+                total_pages = len(pdf.pages)
 
-                # If page has no text, use empty string
-                if page_text is None:
+                # Go through each page
+                for page_num, page in enumerate(pdf.pages, 1):
                     page_text = ''
 
-                # Remove extra spaces at beginning and end
-                page_text = page_text.strip()
+                    try:
+                        # Extract text with timeout using ThreadPoolExecutor
+                        with ThreadPoolExecutor(max_workers=1) as executor:
+                            future = executor.submit(page.extract_text)
+                            try:
+                                page_text = future.result(timeout=page_timeout)
+                            except FuturesTimeoutError:
+                                print(f"Warning: Page {page_num} extraction timed out after {page_timeout}s, skipping")
+                                page_text = ''
 
-                # Add this page's text to list
-                all_pages.append(page_text)
+                    except Exception as page_error:
+                        print(f"Warning: Failed to extract text from page {page_num}: {str(page_error)}")
+                        page_text = ''
 
-        # Join all pages with double newline between them
-        all_text = "\n\n".join(all_pages)
-        return all_text
+                    # If page has no text, use empty string
+                    if page_text is None:
+                        page_text = ''
+
+                    # Remove extra spaces at beginning and end
+                    page_text = page_text.strip()
+
+                    # Add this page's text to list
+                    all_pages.append(page_text)
+
+            # Join all pages with double newline between them
+            all_text = "\n\n".join(all_pages)
+            return all_text
+
+        except Exception as error:
+            raise ValueError(f"Failed to open or process PDF: {str(error)}")
 
     def process_pdf(self, pdf_path, source_name):
         """
