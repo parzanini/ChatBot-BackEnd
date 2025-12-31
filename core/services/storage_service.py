@@ -1,4 +1,5 @@
 import time
+from mongoengine.connection import get_db
 from core.documents import KnowledgeChunk
 
 
@@ -13,7 +14,9 @@ class KnowledgeStore:
     - Creates unique IDs for each chunk
     """
 
-    def __init__(self, db_client):
+    def __init__(self, db_client=None):
+        if db_client is None:
+            db_client = get_db()
         self.db_client = db_client
 
     def save_chunks(self, chunks, embeddings, source_type, source_name,
