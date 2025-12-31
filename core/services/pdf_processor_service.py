@@ -1,5 +1,4 @@
 import pdfplumber
-from concurrent.futures import (ThreadPoolExecutor, TimeoutError as FuturesTimeoutError)
 
 from core.services.chunker_service import Chunker
 from core.services.embedding_service import EmbeddingService
@@ -37,19 +36,18 @@ class PDFProcessorService:
         # Create a storage to save to database
         self.storage = KnowledgeStore()
 
-    def extract_text(self, pdf_path, page_timeout=5):
+    def extract_text(self, pdf_path):
         """
-        Read all the text from a PDF file with timeout protection.
+        Read all the text from a PDF file.
 
         Steps:
         1. Open the PDF
-        2. Go through each page with timeout protection
+        2. Go through each page
         3. Extract text from each page
         4. Join all pages together
 
         Args:
             pdf_path: The file path to the PDF (like "C:/documents/handbook.pdf")
-            page_timeout: Maximum seconds to spend extracting text from one page (default: 5)
 
         Returns:
             All the text from the PDF as one long string
@@ -67,17 +65,9 @@ class PDFProcessorService:
 
                 # Go through each page
                 for page_num, page in enumerate(pdf.pages, 1):
-                    page_text = ''
-
                     try:
-                        # Extract text with timeout using ThreadPoolExecutor
-                        with ThreadPoolExecutor(max_workers=1) as executor:
-                            future = executor.submit(page.extract_text)
-                            try:
-                                page_text = future.result(timeout=page_timeout)
-                            except FuturesTimeoutError:
-                                print(f"Warning: Page {page_num} extraction timed out after {page_timeout}s, skipping")
-                                page_text = ''
+                        # Extract text 
+                        page_text = page.extract_text()
 
                     except Exception as page_error:
                         print(f"Warning: Failed to extract text from page {page_num}: {str(page_error)}")
