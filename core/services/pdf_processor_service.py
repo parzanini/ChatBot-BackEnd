@@ -51,44 +51,35 @@ class PDFProcessorService:
 
         Returns:
             All the text from the PDF as one long string
-
-        Raises:
-            ValueError: If the PDF cannot be opened or processed
         """
+        print(f"Starting text extraction from PDF: {pdf_path}")
         # List to store text from each page
         all_pages = []
 
-        try:
-            # Open the PDF file
-            with pdfplumber.open(pdf_path) as pdf:
-                total_pages = len(pdf.pages)
+        # Open the PDF file
+        with pdfplumber.open(pdf_path) as pdf:
+            print(f"PDF opened successfully. Total pages: {len(pdf.pages)}")
+            # Go through each page
+            for page_num, page in enumerate(pdf.pages, 1):
+                # Extract text from this page
+                page_text = page.extract_text()
 
-                # Go through each page
-                for page_num, page in enumerate(pdf.pages, 1):
-                    try:
-                        # Extract text 
-                        page_text = page.extract_text()
+                # If page has no text, use empty string
+                if page_text is None:
+                    page_text = ''
 
-                    except Exception as page_error:
-                        print(f"Warning: Failed to extract text from page {page_num}: {str(page_error)}")
-                        page_text = ''
+                # Remove extra spaces at beginning and end
+                page_text = page_text.strip()
 
-                    # If page has no text, use empty string
-                    if page_text is None:
-                        page_text = ''
+                # Add this page's text to our list
+                all_pages.append(page_text)
+                print(f"Extracted text from page {page_num}: {len(page_text)} characters")
 
-                    # Remove extra spaces at beginning and end
-                    page_text = page_text.strip()
+        # Join all pages with double newline between them
+        all_text = "\n\n".join(all_pages)
+        print(f"Text extraction completed. Total characters: {len(all_text)}")
+        return all_text
 
-                    # Add this page's text to list
-                    all_pages.append(page_text)
-
-            # Join all pages with double newline between them
-            all_text = "\n\n".join(all_pages)
-            return all_text
-
-        except Exception as error:
-            raise ValueError(f"Failed to open or process PDF: {str(error)}")
 
     def process_pdf(self, pdf_path, source_name):
         """
@@ -120,25 +111,35 @@ class PDFProcessorService:
         Raises:
             ValueError: If the PDF is empty or can't be processed
         """
+        print(f"Starting PDF processing for: {source_name}")
+        print(f"PDF path: {pdf_path}")
 
         # STEP 1: Extract all text from the PDF
+        print("STEP 1: Extracting text from PDF")
         text = self.extract_text(pdf_path)
 
-        # Make sure There is some text
+        # Make sure we got some text
         text_without_spaces = text.strip()
         if not text_without_spaces:
-            raise ValueError("PDF appears to be empty or contains no text we can read.")
+            error_msg = "PDF appears to be empty or contains no text we can read."
+            print(f"ERROR: {error_msg}")
+            raise ValueError(error_msg)
 
         # STEP 2: Split text into chunks and create titles
+        print("STEP 2: Splitting text into chunks")
         chunks, titles = self.chunker.chunk_with_titles(text)
 
         num_chunks = len(chunks)
+        print(f"Created {num_chunks} chunks from PDF")
 
         # STEP 3: Generate embeddings for all chunks
         # This converts each chunk into a list of numbers
+        print("STEP 3: Generating embeddings for chunks")
         embeddings = self.embedding_service.embed_chunks(chunks)
+        print(f"Generated embeddings for {len(embeddings)} chunks")
 
         # STEP 4: Save everything to MongoDB
+        print("STEP 4: Saving chunks to MongoDB")
         chunks_saved = self.storage.save_chunks(
             chunks=chunks,
             embeddings=embeddings,
@@ -153,6 +154,7 @@ class PDFProcessorService:
             "chunks_created": chunks_saved,
             "source_name": source_name
         }
+        print(f"PDF processing completed successfully. Chunks saved: {chunks_saved}")
         return result
 
 

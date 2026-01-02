@@ -30,29 +30,39 @@ class KnowledgeStore:
                 - (400, {"error": str})
                 - (500, {"error": str})
         """
+        print(f"Starting to save chunks for source: {source_name} (type: {source_type})")
+        print(f"Number of chunks to save: {len(chunks)}")
 
         # Validate inputs
         if not chunks or not embeddings:
-            return 400, {"error": "chunks and embeddings cannot be empty"}
+            error_msg = "chunks and embeddings cannot be empty"
+            print(f"Error: {error_msg}")
+            return 400, {"error": error_msg}
 
         if len(chunks) != len(embeddings):
-            return 400, {
-                "error": f"Chunks ({len(chunks)}) and embeddings ({len(embeddings)}) length mismatch"
-            }
+            error_msg = f"Chunks ({len(chunks)}) and embeddings ({len(embeddings)}) length mismatch"
+            print(f"Error: {error_msg}")
+            return 400, {"error": error_msg}
 
         if titles and len(titles) != len(chunks):
-            return 400, {
-                "error": f"Titles ({len(titles)}) and chunks ({len(chunks)}) length mismatch"
-            }
+            error_msg = f"Titles ({len(titles)}) and chunks ({len(chunks)}) length mismatch"
+            print(f"Error: {error_msg}")
+            return 400, {"error": error_msg}
 
         # Delete old chunks from this source
+        # If delete fails due to connection error, continue anyway and save new chunks
         try:
             if source_url:
+                print(f"Deleting old chunks for URL: {source_url}")
                 self.delete_by_source(source_url=source_url)
             else:
+                print(f"Deleting old chunks for source: {source_name}")
                 self.delete_by_source(source_type=source_type, source_name=source_name)
+            print("Successfully deleted old chunks")
         except Exception as error:
-            return 500, {"error": f"Failed to delete old chunks: {str(error)}"}
+            # Log the error but don't fail - continue to save chunks
+            print(f"Warning: Failed to delete old chunks: {str(error)}")
+            # Continue processing instead of returning error
 
         # Save each chunk
         saved_count = 0
@@ -70,13 +80,53 @@ class KnowledgeStore:
                 )
                 chunk_object.save()
                 saved_count += 1
+                print(f"Successfully saved chunk {i} with ID {unique_id}")
             except Exception as error:
+                error_msg = f"Failed to save chunk {i}: {str(error)}"
+                print(f"Error: {error_msg}")
                 return 500, {
-                    "error": f"Failed to save chunk {i}: {str(error)}",
+                    "error": error_msg,
                     "saved_count": saved_count
                 }
 
+        print(f"Successfully saved {saved_count} chunks for source: {source_name}")
         return 200, {"saved_count": saved_count}
+
+    def source_exists(self, source_type=None, source_name=None, source_url=None):
+        """
+        Check if a source already exists in the database.
+
+        Args:
+            source_type: Type of source ("pdf" or "website")
+            source_name: Name of the source (like "Student Handbook" or "TUS Homepage")
+            source_url: URL of the source (for websites)
+
+        Returns:
+            bool: True if source exists, False otherwise
+        """
+        try:
+            if source_url:
+                # Check by URL (for web scraping)
+                exists = KnowledgeChunk.objects(sourceUrl=source_url).first()
+            elif source_type and source_name:
+                # Check by source type and name (for PDFs)
+                exists = KnowledgeChunk.objects(
+                    sourceType=source_type,
+                    sourceName=source_name
+                ).first()
+            else:
+                print("Warning: source_exists called without proper parameters")
+                return False
+
+            if exists:
+                print(f"Source exists: {source_name if source_name else source_url}")
+                return True
+            else:
+                print(f"Source does not exist: {source_name if source_name else source_url}")
+                return False
+        except Exception as error:
+            print(f"Error checking if source exists: {str(error)}")
+            return False
 
     def delete_by_source(self, source_type=None, source_name=None, source_url=None):
         """
@@ -99,18 +149,24 @@ class KnowledgeStore:
         try:
             if source_url:
                 # Delete by URL (for web scraping)
+                print(f"Deleting chunks for URL: {source_url}")
                 deleted = KnowledgeChunk.objects(sourceUrl=source_url).delete()
             elif source_type and source_name:
                 # Delete by source type and name (for PDFs)
+                print(f"Deleting chunks for source: {source_name}")
                 deleted = KnowledgeChunk.objects(
                     sourceType=source_type,
                     sourceName=source_name
                 ).delete()
             else:
-                raise ValueError("Must provide either source_url or both source_type and source_name")
+                error_msg = "Must provide either source_url or both source_type and source_name"
+                print(f"Error: {error_msg}")
+                raise ValueError(error_msg)
 
+            print(f"Successfully deleted {deleted} chunks")
             return {"deleted_count": deleted}
         except Exception as error:
-            raise Exception(f"Failed to delete chunks: {str(error)}")
-
+            error_msg = f"Failed to delete chunks: {str(error)}"
+            print(f"Error: {error_msg}")
+            raise Exception(error_msg)
 

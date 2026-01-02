@@ -20,6 +20,7 @@ from mongoengine.connection import get_db
 from core import config
 from core.services.embedding_service import EmbeddingService, normalize_vector
 from core.services.pdf_processor_service import PDFProcessorService
+from core.services.storage_service import KnowledgeStore
 from core.services.vector_search_service import VectorSearchService
 
 # Create your views here.
@@ -340,10 +341,11 @@ def upload_pdf(request):
 
     What this does:
     1. Receives a PDF file from the user
-    2. Saves it temporarily
-    3. Processes it (extract text, create chunks, generate embeddings)
-    4. Saves chunks to MongoDB
-    5. Returns success or error message
+    2. Checks if a source with the same name already exists
+    3. Saves it temporarily
+    4. Processes it (extract text, create chunks, generate embeddings)
+    5. Saves chunks to MongoDB
+    6. Returns success or error message
 
     How to use (example):
         POST /api/upload_pdf/
@@ -357,15 +359,20 @@ def upload_pdf(request):
     # Remember when we started (to calculate how long this takes)
     start_time = time.time()
 
+    print("=== PDF Upload Request Started ===")
+
     # STEP 1: Check if a file was uploaded
     if 'file' not in request.FILES:
         # No file found! Return error
+        error_msg = "No file provided. Please upload a PDF file with key 'file'."
+        print(f"Error: {error_msg}")
         return JsonResponse({
-            "error": "No file provided. Please upload a PDF file with key 'file'."
+            "error": error_msg
         }, status=400)
 
     # Get the uploaded file
     pdf_file = request.FILES['file']
+    print(f"File received: {pdf_file.name}")
 
     # STEP 2: Make sure it's a PDF file
     # Get the filename and convert to lowercase
@@ -374,8 +381,10 @@ def upload_pdf(request):
     # Check if it ends with .pdf
     if not filename.endswith('.pdf'):
         # Wrong file type! Return error
+        error_msg = "Invalid file type. Only PDF files are accepted."
+        print(f"Error: {error_msg}")
         return JsonResponse({
-            "error": "Invalid file type. Only PDF files are accepted."
+            "error": error_msg
         }, status=400)
 
     # STEP 3: Get the source name (or use filename as default)
@@ -385,13 +394,30 @@ def upload_pdf(request):
     if not source_name:
         source_name = pdf_file.name
 
+    print(f"Source name: {source_name}")
+
+    # STEP 4: Check if a source with this name already exists
+    print(f"Checking if source '{source_name}' already exists...")
+    knowledge_store = KnowledgeStore()
+
+    if knowledge_store.source_exists(source_type="pdf", source_name=source_name):
+        error_msg = f"A source with the name '{source_name}' already exists. Please use a different name or delete the existing source first."
+        print(f"Warning: {error_msg}")
+        return JsonResponse({
+            "success": False,
+            "error": error_msg
+        }, status=409)  # 409 Conflict status code
+
+    print(f"Source '{source_name}' does not exist. Proceeding with upload.")
+
     # Variable to store temporary file path (so I can delete it later)
     temp_file_path = None
 
     try:
-        # STEP 4: Save the uploaded file temporarily
+        # STEP 5: Save the uploaded file temporarily
         # Save it to disk before processing
         # Use a temporary file that Django will clean up later
+        print("Saving temporary file...")
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
 
         # Write the PDF data to the temporary file
@@ -402,23 +428,28 @@ def upload_pdf(request):
         # Close the file and remember its path
         temp_file.close()
         temp_file_path = temp_file.name
+        print(f"Temporary file saved: {temp_file_path}")
 
-        # STEP 5: Process the PDF
-        # Create a PDF processor
+        # STEP 6: Process the PDF
+        print("Starting PDF processing...")
         processor = PDFProcessorService()
 
         # Process the PDF (extract text, chunk, embed, save)
         result = processor.process_pdf(temp_file_path, source_name)
 
-        # STEP 6: Delete the temporary file (we don't need it anymore)
+        # STEP 7: Delete the temporary file (we don't need it anymore)
         os.unlink(temp_file_path)
+        print("Temporary file deleted")
 
-        # STEP 7: Calculate how long it took
+        # STEP 8: Calculate how long it took
         end_time = time.time()
         total_seconds = end_time - start_time
         total_time = round(total_seconds, 2)
 
-        # STEP 8: Return success response
+        print(f"=== PDF Upload Completed Successfully ===")
+        print(f"Total processing time: {total_time} seconds")
+
+        # STEP 9: Return success response
         response_data = {
             "success": True,
             "message": "PDF processed successfully",
@@ -430,7 +461,9 @@ def upload_pdf(request):
 
     # Except block to catch errors during processing
     except Exception as error:
-        return JsonResponse({"error": f"Failed to process PDF: {error}"}, status=500)
+        print(f"Error during PDF processing: {str(error)}")
+        error_msg = f"Failed to process PDF: {str(error)}"
+        return JsonResponse({"success": False, "error": error_msg}, status=500)
 
 # ------------------------------ URL Scrape Endpoint ------------------------------ #
 @csrf_exempt  # Allow API requests without CSRF token
