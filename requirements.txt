@@ -21,3 +21,7 @@ langchain-text-splitters
 # Gemini API
 google-generativeai
 
+# Web scraping
+requests
+beautifulsoup4
+

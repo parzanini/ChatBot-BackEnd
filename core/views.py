@@ -18,12 +18,11 @@ from django.views.decorators.http import require_POST
 from mongoengine.connection import get_db
 
 from core import config
-from core.services.embedding_service import EmbeddingService, normalize_vector
+from core.services.embedding_service import normalize_vector
 from core.services.pdf_processor_service import PDFProcessorService
 from core.services.storage_service import KnowledgeStore
 from core.services.vector_search_service import VectorSearchService
-
-# Create your views here.
+from core.services.web_scraper_service import extract_all_configured_links
 
 # Set up Google's AI once when the server starts
 genai.configure(api_key=config.GEMINI_API_KEY)
@@ -467,13 +466,12 @@ def upload_pdf(request):
 
 # ------------------------------ URL Scrape Endpoint ------------------------------ #
 @csrf_exempt  # Allow API requests without CSRF token
-@require_POST  # Only accept POST requests
 def scrape_url(request):
     """
     API Endpoint: Scrape and process a web page.
 
     What this does:
-    1. Receives a URL from the user
+    1. Get a list of links to be scraped from web_scraper_service.py
     2. Downloads the web page
     3. Extracts the main content (removes menus, ads, etc.)
     4. Processes it (create chunks, generate embeddings)
@@ -481,14 +479,22 @@ def scrape_url(request):
     6. Returns success or error message
 
     How to use (example):
-        POST /api/scrape_url/
-        JSON body: {
-            "url": "https://tus.ie/courses/",
-            "source_name": "TUS Courses"  (optional)
-        }
+        GET /api/scrape_url/
 
     Returns:
         JSON with success status and number of chunks created
     """
     # Remember time
     start_time = time.time()
+    print("=== URL Scrape Request Started ===")
+
+    # STEP 1: Get the list of links to scrape
+    print("STEP 1: Extracting links from configured URLs...")
+    all_links = extract_all_configured_links()
+
+    print("\n--- Links to Scrape ---")
+    for url, links in all_links.items():
+        print(f"\n{url}")
+        print(f"Total links: {len(links)}")
+        for link in links:
+            print(f"  - {link}")
