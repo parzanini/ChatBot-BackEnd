@@ -18,11 +18,11 @@ from django.views.decorators.http import require_POST
 from mongoengine.connection import get_db
 
 from core import config
-from core.services.embedding_service import normalize_vector
+from core.services.embedding_service import EmbeddingService, normalize_vector
 from core.services.pdf_processor_service import PDFProcessorService
 from core.services.storage_service import KnowledgeStore
 from core.services.vector_search_service import VectorSearchService
-from core.services.web_scraper_service import extract_all_configured_links
+from core.services.web_scraper_service import extract_all_links
 
 # Set up Google's AI once when the server starts
 genai.configure(api_key=config.GEMINI_API_KEY)
@@ -490,7 +490,7 @@ def scrape_url(request):
 
     # STEP 1: Get the list of links to scrape
     print("STEP 1: Extracting links from configured URLs...")
-    all_links = extract_all_configured_links()
+    all_links = extract_all_links()
 
     print("\n--- Links to Scrape ---")
     for url, links in all_links.items():
