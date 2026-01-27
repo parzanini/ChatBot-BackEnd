@@ -22,7 +22,7 @@ from core.services.embedding_service import EmbeddingService, normalize_vector
 from core.services.pdf_processor_service import PDFProcessorService
 from core.services.storage_service import KnowledgeStore
 from core.services.vector_search_service import VectorSearchService
-from core.services.web_scraper_service import extract_all_links
+from core.services.web_scraper_service import extract_and_process_links
 
 # Set up Google's AI once when the server starts
 genai.configure(api_key=config.GEMINI_API_KEY)
@@ -69,7 +69,7 @@ def ask(request):
         user_request = json.loads(request_body)
 
     except Exception:
-        # The JSON was invalid (malformed, not JSON, etc.)
+        # The JSON was invalid (not JSON, etc.)
         error_message = "Invalid JSON body. The correct format is: {\"query\": \"your question here\"}"
         return JsonResponse({"error": error_message}, status=400)
 
@@ -202,7 +202,7 @@ def ask(request):
             similarity_scores.append(score_rounded)
         adm_info["similarities"] = similarity_scores
 
-        # Get the top score (if we have results)
+        # Get the top score if any documents found
         if len(matching_docs) > 0:
             top_doc = matching_docs[0]
             top_score = top_doc.get("score", 0.0)
@@ -218,7 +218,7 @@ def ask(request):
         return JsonResponse({"error": error_message}, status=500)
 
     # STEP 9: Build context from the search results
-    # We'll send this context to the AI along with the question
+    # Send this context to the AI along with the question
     context_chunks = []
     sources = []
 
@@ -490,11 +490,5 @@ def scrape_url(request):
 
     # STEP 1: Get the list of links to scrape
     print("STEP 1: Extracting links from configured URLs...")
-    all_links = extract_all_links()
+    extract_and_process_links()
 
-    print("\n--- Links to Scrape ---")
-    for url, links in all_links.items():
-        print(f"\n{url}")
-        print(f"Total links: {len(links)}")
-        for link in links:
-            print(f"  - {link}")

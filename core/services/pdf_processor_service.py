@@ -118,7 +118,7 @@ class PDFProcessorService:
         print("STEP 1: Extracting text from PDF")
         text = self.extract_text(pdf_path)
 
-        # Make sure we got some text
+        # Make sure there is text to work with
         text_without_spaces = text.strip()
         if not text_without_spaces:
             error_msg = "PDF appears to be empty or contains no text we can read."
