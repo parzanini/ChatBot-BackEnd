@@ -49,21 +49,6 @@ class KnowledgeStore:
             print(f"Error: {error_msg}")
             return 400, {"error": error_msg}
 
-        # Delete old chunks from this source
-        # If delete fails due to connection error, continue anyway and save new chunks
-        try:
-            if source_url:
-                print(f"Deleting old chunks for URL: {source_url}")
-                self.delete_by_source(source_url=source_url)
-            else:
-                print(f"Deleting old chunks for source: {source_name}")
-                self.delete_by_source(source_type=source_type, source_name=source_name)
-            print("Successfully deleted old chunks")
-        except Exception as error:
-            # Log the error but don't fail - continue to save chunks
-            print(f"Warning: Failed to delete old chunks: {str(error)}")
-            # Continue processing instead of returning error
-
         # Save each chunk
         saved_count = 0
         for i in range(len(chunks)):
@@ -128,17 +113,15 @@ class KnowledgeStore:
             print(f"Error checking if source exists: {str(error)}")
             return False
 
-    def delete_by_source(self, source_type=None, source_name=None, source_url=None):
+    def delete_by_source(self, source_type=None):
         """
-        Delete all chunks from a specific source.
+        Delete all chunks from a specific source by source name.
 
         This is used to remove old chunks before saving new ones from the same source
         (prevents duplicates and stale data).
 
         Args:
-            source_type: Type of source ("pdf" or "website")
             source_name: Name of the source (like "Student Handbook" or "TUS Homepage")
-            source_url: URL of the source (for websites)
 
         Returns:
             dict: {"deleted_count": number of chunks deleted}
@@ -147,19 +130,11 @@ class KnowledgeStore:
             ValueError: If parameters are invalid
         """
         try:
-            if source_url:
-                # Delete by URL (for web scraping)
-                print(f"Deleting chunks for URL: {source_url}")
-                deleted = KnowledgeChunk.objects(sourceUrl=source_url).delete()
-            elif source_type and source_name:
-                # Delete by source type and name (for PDFs)
-                print(f"Deleting chunks for source: {source_name}")
-                deleted = KnowledgeChunk.objects(
-                    sourceType=source_type,
-                    sourceName=source_name
-                ).delete()
+            if source_type:
+                print(f"Deleting chunks for source: {source_type}")
+                deleted = KnowledgeChunk.objects(sourceType=source_type).delete()
             else:
-                error_msg = "Must provide either source_url or both source_type and source_name"
+                error_msg = "Must provide source_name"
                 print(f"Error: {error_msg}")
                 raise ValueError(error_msg)
 
@@ -169,4 +144,3 @@ class KnowledgeStore:
             error_msg = f"Failed to delete chunks: {str(error)}"
             print(f"Error: {error_msg}")
             raise Exception(error_msg)
-

@@ -25,6 +25,13 @@ def extract_and_process_links():
 
     To add more URLs, just add them to the urls_to_scrape array below.
     """
+    # Remove existing website chunks before scraping to avoid stale data
+    try:
+        KnowledgeStore().delete_by_source(source_type="website")
+        print("Existing website chunks deleted successfully.")
+    except Exception as error:
+        print(f"Warning: Failed to delete existing website chunks: {error}")
+
     # Configure URLs to scrape (add more as needed)
     urls_to_scrape = [
         {
@@ -193,7 +200,7 @@ def process_course_page(url):
             tag.decompose()
 
         # Get clean text
-        content = maincontent.get_text(separator='\n', strip=True)
+        content = "\n".join(maincontent.stripped_strings) # Join all text with newlines
         if not content:
             error_msg = f"No content extracted from {url}"
             print(f"Error: {error_msg}")
