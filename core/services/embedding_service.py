@@ -126,22 +126,29 @@ class EmbeddingService:
             # Return error information
             return {"error": str(e)}
 
-    def embed_chunks(self, chunks, task_type="retrieval_document"):
+    def embed_chunks(self, chunks, titles=None, task_type="retrieval_document"):
         """
         Convert multiple pieces of text into embeddings.
 
         This processes each chunk one at a time. The cache helps speed things up
         if text seen before.
 
+        IMPORTANT: If titles are provided, they are prepended to chunks before embedding.
+        This significantly improves retrieval accuracy by including semantic context.
+        Format: "Title\n\nContent"
+
         Steps:
         1. Create an empty list to store all embeddings
         2. Go through each chunk one by one
-        3. Convert each chunk to an embedding
-        4. Add the embedding to our list
-        5. Return the complete list
+        3. If title exists, prepend it to the chunk for better context
+        4. Convert each chunk to an embedding
+        5. Add the embedding to our list
+        6. Return the complete list
 
         Args:
             chunks: A list of text chunks to convert
+            titles: Optional list of titles (same length as chunks). If provided, titles
+                   are prepended to chunks before embedding for better retrieval accuracy.
             task_type: What this is for (usually "retrieval_document")
 
         Returns:
@@ -152,24 +159,35 @@ class EmbeddingService:
 
         # Step 2: Process each chunk one by one
         chunk_number = 0
-        for chunk in chunks:
+        for i, chunk in enumerate(chunks):
             # Every 10 chunks, print progress
             if chunk_number > 0 and chunk_number % 10 == 0:
                 print(f"Embedding chunk {chunk_number}...")
 
-            # Step 3: Convert this chunk to an embedding
-            embedding = self.embed_single(chunk, task_type=task_type)
+            # Step 3: Prepare text for embedding (include title if available)
+            if titles and i < len(titles):
+                # Prepend title to chunk for better semantic context
+                # This helps retrieval find the right chunks when users ask specific questions
+                # Example: "Computing with AI – BSc (Hons)\n\nContact Details: Mary Ryan..."
+                text_to_embed = f"{titles[i]}\n\n{chunk}"
+            else:
+                # No title available, just use the chunk
+                text_to_embed = chunk
 
-            # Step 4: Add it to our list
+            # Step 4: Convert this text to an embedding
+            embedding = self.embed_single(text_to_embed, task_type=task_type)
+
+            # Step 5: Add it to our list
             all_embeddings.append(embedding)
 
             chunk_number = chunk_number + 1
 
-        # Step 5: Log some stats
+        # Step 6: Log some stats
         total_chunks = len(chunks)
-        cached_count = len(self._cache)
+        with_titles = "YES" if titles else "NO"
+        print(f"Embedded {total_chunks} chunks (titles included: {with_titles})")
 
-        # Step 6: Return all the embeddings
+        # Step 7: Return all the embeddings
         return all_embeddings
 
     def clear_cache(self):

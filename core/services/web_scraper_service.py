@@ -208,18 +208,20 @@ def process_course_page(url):
 
         # Chunk the content
         chunker = Chunker()
-        chunks = chunker.chunk_text(content)
+        result = chunker.chunk_text(content)
 
-        if isinstance(chunks, dict) and "error" in chunks:
-            error_msg = f"Failed to chunk content: {chunks['error']}"
+        if isinstance(result, dict) and "error" in result:
+            error_msg = f"Failed to chunk content: {result['error']}"
             print(f"Error: {error_msg}")
             return 400, {"error": error_msg}
 
+        chunks, titles = result
         print(f"Created {len(chunks)} chunks")
 
         # Create embeddings
+        # IMPORTANT: Pass titles to improve retrieval accuracy
         embedding_service = EmbeddingService()
-        embeddings = embedding_service.embed_chunks(chunks)
+        embeddings = embedding_service.embed_chunks(chunks, titles=titles)
 
         if isinstance(embeddings, dict) and "error" in embeddings:
             error_msg = f"Failed to create embeddings: {embeddings['error']}"

@@ -127,15 +127,15 @@ class PDFProcessorService:
 
         # STEP 2: Split text into chunks and create titles
         print("STEP 2: Splitting text into chunks")
-        chunks, titles = self.chunker.chunk_with_titles(text)
+        chunks, titles = self.chunker.chunk_text(text)
 
         num_chunks = len(chunks)
         print(f"Created {num_chunks} chunks from PDF")
 
-        # STEP 3: Generate embeddings for all chunks
-        # This converts each chunk into a list of numbers
-        print("STEP 3: Generating embeddings for chunks")
-        embeddings = self.embedding_service.embed_chunks(chunks)
+        # STEP 3: This converts each chunk into a list of numbers
+        # The title provides semantic context (e.g., "Computing with AI – BSc (Hons)")
+        print("STEP 3: Generating embeddings for chunks (with titles for better retrieval)")
+        embeddings = self.embedding_service.embed_chunks(chunks, titles=titles)
         print(f"Generated embeddings for {len(embeddings)} chunks")
 
         # STEP 4: Save everything to MongoDB

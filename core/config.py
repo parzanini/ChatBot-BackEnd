@@ -11,7 +11,7 @@ import os
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Which Gemini model to use for generating answers
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Which model to use for creating embeddings
 EMBEDDING_MODEL = "models/text-embedding-004"
@@ -28,10 +28,10 @@ BATCH_SIZE = 32
 # These settings control how we split long documents into smaller pieces
 
 # How many characters in each chunk (smaller = more chunks, larger = fewer chunks)
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "500"))
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
 
 # How many characters to overlap between chunks (helps maintain context)
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "50"))
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "100"))
 
 # What to split on (tries each separator in order)
 CHUNK_SEPARATORS = ["\n\n", "\n", ". ", " ", ""]

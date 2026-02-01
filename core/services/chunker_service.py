@@ -1,15 +1,13 @@
 """
-Chunker - Splits long text into smaller pieces.
+Chunker - Splits long text into smaller pieces for the chatbot.
 
-Why split text?
 - AI works better with smaller pieces of text
 - Easier to search and find relevant information
 - Each chunk gets its own embedding (number representation)
 
-What does this file do?
 - Takes long text (like a PDF or web page)
-- Splits it into chunks of about 500 characters each
-- Makes sure chunks overlap a bit (so context isn't lost)
+- Splits it into chunks of about 1000 characters each
+- Chunks overlap so context isn't lost
 - Creates a title for each chunk
 """
 import re
@@ -18,156 +16,121 @@ from core import config
 
 
 class Chunker:
-    def __init__(self, chunk_size=None, chunk_overlap=None, separators=None):
+    def __init__(self):
         """
-        Set up the chunker.
+        Set up the chunker with default settings from config.
 
-        Args:
-            chunk_size: How many characters in each chunk (optional, uses 500 by default)
-            chunk_overlap: How many characters to repeat between chunks (optional, uses 50 by default)
-            separators: What to split on (optional, uses \\n\\n, \\n, ". ", " " by default)
+        Default settings:
+        - chunk_size: 1000 characters per chunk
+        - chunk_overlap: 100 characters overlap between chunks
+        - separators: Split on paragraphs (\\n\\n), lines (\\n), sentences (". "), or words (" ")
         """
-        # Use provided values or fall back to config defaults
-        if chunk_size is not None:
-            self.chunk_size = chunk_size
-        else:
-            self.chunk_size = config.CHUNK_SIZE
-
-        if chunk_overlap is not None:
-            self.chunk_overlap = chunk_overlap
-        else:
-            self.chunk_overlap = config.CHUNK_OVERLAP
-
-        if separators is not None:
-            self.separators = separators
-        else:
-            self.separators = config.CHUNK_SEPARATORS
-
         # Create the splitter tool from langchain
         # This does the actual work of splitting text
         self.splitter = RecursiveCharacterTextSplitter(
-            chunk_size=self.chunk_size,
-            chunk_overlap=self.chunk_overlap,
-            separators=self.separators
+            chunk_size=config.CHUNK_SIZE,
+            chunk_overlap=config.CHUNK_OVERLAP,
+            separators=config.CHUNK_SEPARATORS
         )
 
     def chunk_text(self, text):
         """
-        Split long text into smaller chunks.
+        Split long text into smaller chunks with titles.
 
-        Steps:
-        1. Check if text is empty (error if it is)
-        2. Use the splitter to break text into chunks
-        3. Check if we got any chunks (error if we didn't)
-        4. Return the list of chunks
+        All chunks get the same keyword title with different numbers:
+        - "Computing with AI – BSc (Hons) [1/49]"
+        - "Computing with AI – BSc (Hons) [2/49]"
+        ...and so on
 
         Args:
             text: The long text to split
 
         Returns:
-            A list of text chunks (each chunk is a string)
-            OR {"error": "..."} if the input is invalid or splitting fails.
+            (chunks, titles) - Two lists of the same length
+            OR {"error": "..."} if text is empty
         """
-        # Step 1: Make sure we have text to work with
-        if not text:
+        # Step 1: Check if text is empty
+        if not text or not text.strip():
             return {"error": "Cannot chunk empty text"}
 
-        text_without_spaces = text.strip()
-        if not text_without_spaces:
-            return {"error": "Cannot chunk empty text"}
+        # Step 2: Extract keywords from the beginning
+        # This keyword will be reused for ALL chunk titles
+        keywords = self._extract_keywords(text)
 
-        # Step 2: Use the splitter to break text into chunks
+        # Step 3: Split text into chunks (using langchain splitter)
         chunks = self.splitter.split_text(text)
 
-        # Step 3: Make sure we got at least one chunk
         if not chunks:
             return {"error": "No chunks generated from text"}
 
-        # Step 4: Return the chunks
-        return chunks
+        # Step 4: Create titles for all chunks
+        # Same keywords + different numbers: [1/49], [2/49], [3/49], etc.
+        total_chunks = len(chunks)
+        titles = [f"{keywords} [{i+1}/{total_chunks}]" for i in range(total_chunks)]
 
-    def chunk_with_titles(self, text):
-        """
-        Split text into chunks and create a title for each chunk.
-        This is good because often want both the chunks and titles.
-
-        Steps:
-        1. Split the text into chunks
-        2. For each chunk, create a short title
-        3. Return both lists
-
-        Args:
-            text: The long text to split
-
-        Returns:
-            Two lists: (chunks, titles)
-            - chunks: List of text chunks
-            - titles: List of titles (same order as chunks)
-        """
-        # Step 1: Split the text
-        chunks = self.chunk_text(text)
-        if isinstance(chunks, dict) and "error" in chunks:
-            return chunks
-
-        # Step 2: Create a title for each chunk
-        titles = []
-        for chunk in chunks:
-            title = generate_title(chunk)
-            titles.append(title)
-
-        # Step 4: Return both lists
+        # Step 5: Return chunks and titles
         return chunks, titles
 
+    def _extract_keywords(self, text, max_len=60):
+        """
+        Extract keywords from the beginning of the text.
 
-def generate_title(text, max_length=50):
-    """
-    Generate a short title from the beginning of the text.
+        Example: "Computing with AI – BSc (Hons)" from the first few lines
 
-    This extracts the first sentence or first few words to use as a title.
+        Returns: A string (max 60 chars) to use for all chunk titles
+        """
+        # Handle empty text
+        if not text:
+            return "Untitled Document"
 
-    Steps:
-    1. Clean up the text (remove extra spaces)
-    2. Find the first sentence
-    3. If too long, take just the first few words
-    4. Return the title
+        # Get first 500 characters and split into lines
+        first_part = text[:500]
+        lines = [line.strip() for line in first_part.split('\n') if line.strip()]
 
-    Args:
-        text: The text to create a title from
-        max_length: Maximum length of the title (default 50 characters)
+        if not lines:
+            return "Untitled Document"
 
-    Returns:
-        A short title string
-    """
-    # Step 1: Clean up the text
-    if not text:
-        return "Untitled"
+        # Check first 5 lines for a good heading
+        for line in lines[:5]:
+            # Remove extra spaces: "  Hello   World " -> "Hello World"
+            clean_line = re.sub(r'\s+', ' ', line)
 
-    # Remove extra whitespace
-    cleaned = re.sub(r'\s+', ' ', text.strip())
+            # Skip if line is too short (less than 10 characters)
+            if len(clean_line) < 10:
+                continue
 
-    if not cleaned:
-        return "Untitled"
+            # Skip if line has only numbers/symbols (like "123" or "---")
+            if re.match(r'^[\d\s.\-]+$', clean_line):
+                continue
 
-    # Step 2: Try to find the first sentence
-    # Look for sentence endings: . ! ?
-    sentence_match = re.match(r'^[^.!?]+[.!?]', cleaned)
+            # This line looks good then Use it as keywords
+            # Shorten if longer than max_len (60 characters)
+            if len(clean_line) > max_len:
+                # Truncate to max_len
+                shortened = clean_line[:max_len]
 
-    if sentence_match:
-        first_sentence = sentence_match.group(0).strip()
-    else:
-        # No sentence ending found, use the whole text
-        first_sentence = cleaned
+                # Find last space to avoid cutting words in half
+                last_space_position = shortened.rfind(' ')
 
-    # Step 3: If still too long, take first few words
-    if len(first_sentence) > max_length:
-        # Take first max_length characters and add "..."
-        title = first_sentence[:max_length].strip()
-        # Try to break at last space to avoid cutting words
-        last_space = title.rfind(' ')
-        if last_space > max_length // 2:  # Only if space is not too early
-            title = title[:last_space]
-        title = title + "..."
-    else:
-        title = first_sentence
+                # Cut at last space (if it's not too early in the text)
+                if last_space_position > max_len // 2:
+                    shortened = shortened[:last_space_position]
 
-    return title
+                return shortened + "..."
+
+            # Line is short enough, return as-is
+            return clean_line
+
+        # No good heading found, use first 60 characters as fallback
+        fallback = re.sub(r'\s+', ' ', text.strip())
+
+        if len(fallback) > max_len:
+            shortened = fallback[:max_len]
+            last_space_position = shortened.rfind(' ')
+
+            if last_space_position > max_len // 2:
+                shortened = shortened[:last_space_position]
+
+            return shortened + "..."
+
+        return fallback
