@@ -1,7 +1,7 @@
 """Web Scraper Service - Extract links from web pages
 
 This module provides functionality to extract all sub-links from a given URL.
-For courses, it handles pagination by looping through page_number parameter.
+For courses, it handles pagination by looping through sf_paged parameter in TUS Website.
 """
 
 from urllib.parse import urljoin, urlparse
@@ -82,7 +82,7 @@ def extract_and_process_links():
             max_pages = config.get("max_pages", 70)
             for page_num in range(1, max_pages + 1):
                 pages_to_fetch.append({
-                    "url": f"{url}?results-id=751&view-mode=table&page_number={page_num}",
+                    "url": f"{url}?results-id=751&view-mode=table&sf_paged={page_num}",
                     "page_num": page_num
                 })
         else:
@@ -98,12 +98,12 @@ def extract_and_process_links():
                     print(f"Fetching page {page_num}...", end=" ")
                 else:
                     print(f"Fetching page...", end=" ")
-
+                # Get the page content, timeout after 10 seconds
                 response = requests.get(page_url, timeout=10)
                 response.raise_for_status()
                 soup = BeautifulSoup(response.content, 'html.parser')
 
-                # Extract all links from this page
+                # Extract all links from this page using href attributes
                 page_links = 0
                 for link in soup.find_all('a', href=True):
                     href = link['href']
@@ -112,9 +112,9 @@ def extract_and_process_links():
 
                     # Only process links within the same domain and base path
                     if parsed_url.netloc == base_domain:
-                        link_path = parsed_url.path.rstrip('/')
+                        link_path = parsed_url.path.rstrip('/') # Remove trailing slash
 
-                        if link_path and link_path.startswith(base_path) and link_path != base_path:
+                        if link_path and link_path.startswith(base_path) and link_path != base_path: # Exclude the base path itself
                             clean_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
                             if parsed_url.query:
                                 clean_url += f"?{parsed_url.query}"
@@ -241,8 +241,6 @@ def process_course_page(url):
             print(f"Error: {error_msg}")
             return 400, {"error": error_msg}
 
-        # Generate chunk titles
-        titles = [f"{course_title} - Section {i+1}" for i in range(len(chunks))]
 
         # Save to database
         storage = KnowledgeStore()

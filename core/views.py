@@ -426,7 +426,7 @@ def upload_pdf(request):
         processor = PDFProcessorService()
 
         # Process the PDF (extract text, chunk, embed, save)
-        result = processor.process_pdf(temp_file_path, source_name)
+        result = processor.process_pdf(temp_file_path, source_name,source_type ="Manual Upload")
 
         # STEP 7: Delete the temporary file (we don't need it anymore)
         os.unlink(temp_file_path)
@@ -463,11 +463,12 @@ def index_database(request):
     API Endpoint: Full database indexer.
 
     This endpoint reindexes the entire knowledge base by:
-    1. Scraping all configured web pages from TUS website
-    2. Processing PDF files from a configured folder (future feature)
-    3. Creating chunks from all content
-    4. Generating embeddings for all chunks
-    5. Saving everything to MongoDB with vector search index
+    1. Deleting existing PDF chunks
+    2. Processing PDF files from a configured folder
+    3. Scraping all configured web pages from TUS website
+    4. Creating chunks from all content
+    5. Generating embeddings for all chunks
+    6. Saving everything to MongoDB with vector search index
 
     This is a complete rebuild of the knowledge base.
 
@@ -475,32 +476,136 @@ def index_database(request):
         GET /api/index_database/
 
     Returns:
-        JSON with success status, pages indexed, pages failed, and total time
+        JSON with success status, pages indexed, pages failed, PDFs processed, and total time
     """
     # Remember time
     start_time = time.time()
     print("=== Database Indexing Started ===")
 
     try:
-        # STEP 1: Get the list of links to scrape
-        print("STEP 1: Extracting links from configured URLs...")
+        # STEP 1: Delete existing PDF chunks
+        print("\nSTEP 1: Deleting existing PDF chunks...")
+        try:
+            delete_result = KnowledgeStore().delete_by_source(source_type="pdf")
+            print(f"Deleted {delete_result['deleted_count']} existing PDF chunks")
+        except Exception as error:
+            print(f"Warning: Failed to delete existing PDF chunks: {error}")
+
+        # STEP 2: Process PDF files from folder
+        print("\nSTEP 2: Processing PDF files from folder...")
+
+        # Check if folder exists
+        if not os.path.exists(config.PDF_FOLDER_PATH):
+            error_msg = f"PDF folder does not exist: {config.PDF_FOLDER_PATH}"
+            print(f"Error: {error_msg}")
+
+            # Calculate time
+            end_time = time.time()
+            total_seconds = end_time - start_time
+            total_time = round(total_seconds, 2)
+
+            return JsonResponse({
+                "success": False,
+                "error": error_msg,
+                "processing_time_seconds": total_time
+            }, status=500)
+
+        # Get all PDF files from folder
+        try:
+            all_files = os.listdir(config.PDF_FOLDER_PATH)
+        except Exception as error:
+            error_msg = f"Failed to read PDF folder: {str(error)}"
+            print(f"Error: {error_msg}")
+
+            end_time = time.time()
+            total_seconds = end_time - start_time
+            total_time = round(total_seconds, 2)
+
+            return JsonResponse({
+                "success": False,
+                "error": error_msg,
+                "processing_time_seconds": total_time
+            }, status=500)
+
+        # Filter for PDF files only
+        pdf_files = [f for f in all_files if f.lower().endswith('.pdf')]
+        total_pdfs = len(pdf_files)
+
+        print(f"Found {total_pdfs} PDF file(s) to process")
+
+        # Process each PDF file
+        pdf_success = 0
+        pdf_failures = 0
+        processed_names = set()
+        processor = PDFProcessorService()
+
+        print(f"\n{'='*60}")
+        print(f"Processing PDFs from: {config.PDF_FOLDER_PATH}")
+        print('='*60)
+
+        for idx, pdf_filename in enumerate(pdf_files, 1):
+            # Get source name (filename without .pdf extension)
+            source_name = pdf_filename[:-4] if pdf_filename.lower().endswith('.pdf') else pdf_filename
+
+            # Skip if we already processed a file with this name
+            if source_name in processed_names:
+                print(f"\n[{idx}/{total_pdfs}] {pdf_filename}")
+                print(f"⊗ Skipped: Duplicate filename")
+                continue
+
+            # Add to processed set
+            processed_names.add(source_name)
+
+            # Get full path to PDF file
+            pdf_path = os.path.join(config.PDF_FOLDER_PATH, pdf_filename)
+
+            print(f"\n[{idx}/{total_pdfs}] {pdf_filename}")
+
+            try:
+                # Process the PDF
+                result = processor.process_pdf(
+                    pdf_path=pdf_path,
+                    source_name=source_name,
+                    source_type="pdf"
+                )
+
+                pdf_success += 1
+                print(f"✓ Success: Saved {result['chunks_created']} chunks")
+
+            except Exception as error:
+                pdf_failures += 1
+                print(f"✗ Failed: {str(error)}")
+
+        print(f"\n{'='*60}")
+        print(f"PDF Processing Complete")
+        print('='*60)
+        print(f"Total PDFs found: {total_pdfs}")
+        print(f"Successfully processed: {pdf_success}")
+        print(f"Failed: {pdf_failures}")
+        print('='*60)
+
+        # STEP 3: Scrape and process website pages
+        print("\nSTEP 3: Scraping website pages...")
         scrape_stats = extract_and_process_links()
 
-        # STEP 2: Calculate total time
+        # STEP 4: Calculate total time
         end_time = time.time()
         total_seconds = end_time - start_time
         total_time = round(total_seconds, 2)
 
-        print(f"=== Database Indexing Completed Successfully ===")
+        print(f"\n=== Database Indexing Completed Successfully ===")
         print(f"Total processing time: {total_time} seconds")
 
-        # STEP 3: Return success response
+        # STEP 5: Return success response
         response_data = {
             "success": True,
             "message": "Database indexing completed successfully",
             "pages_indexed": scrape_stats["success_count"],
             "pages_failed": scrape_stats["error_count"],
             "total_pages": scrape_stats["total_pages"],
+            "pdfs_processed": pdf_success,
+            "pdfs_failed": pdf_failures,
+            "total_pdfs": total_pdfs,
             "processing_time_seconds": total_time
         }
         return JsonResponse(response_data, status=200)
@@ -519,3 +624,5 @@ def index_database(request):
             "error": error_msg,
             "processing_time_seconds": total_time
         }, status=500)
+
+# ------------------------------ CRUD ENDPOINTS ------------------------------ #

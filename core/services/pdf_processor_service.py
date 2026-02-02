@@ -81,7 +81,7 @@ class PDFProcessorService:
         return all_text
 
 
-    def process_pdf(self, pdf_path, source_name):
+    def process_pdf(self, pdf_path, source_name, source_type = None):
         """
         Process a PDF file from start to finish.
 
@@ -126,20 +126,23 @@ class PDFProcessorService:
 
         # STEP 3: This converts each chunk into a list of numbers
         # The title provides semantic context (e.g., "Computing with AI – BSc (Hons)")
-        print("STEP 3: Generating embeddings for chunks (with titles for better retrieval)")
+        print("STEP 3: Generating embeddings for chunks")
         embeddings = self.embedding_service.embed_chunks(chunks, titles=titles)
         print(f"Generated embeddings for {len(embeddings)} chunks")
 
         # STEP 4: Save everything to MongoDB
         print("STEP 4: Saving chunks to MongoDB")
-        chunks_saved = self.storage.save_chunks(
+        status_code, response_data = self.storage.save_chunks(
             chunks=chunks,
             embeddings=embeddings,
-            source_type="pdf",
+            source_type=source_type,
             source_name=source_name,
             titles=titles,
             source_url=None  # PDFs don't have URLs
         )
+
+        # Get the number of chunks saved
+        chunks_saved = response_data.get("saved_count", 0)
 
         # STEP 5: Return summary
         result = {

@@ -37,6 +37,12 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "100"))
 CHUNK_SEPARATORS = ["\n\n", "\n", ". ", " ", ""]
 
 # ============================================================================
+# PDF FOLDER SETTINGS
+# ============================================================================
+# Path to folder containing PDF files to index
+PDF_FOLDER_PATH = os.getenv("PDF_FOLDER_PATH", "C:\\PDFs_database")
+
+# ============================================================================
 # MONGODB DATABASE SETTINGS
 # ============================================================================
 # These settings control how we store and search data in MongoDB
