@@ -1,45 +1,31 @@
+from .. import config
+
+
 class VectorSearchService:
     """
     This class searches for similar text chunks in the database.
 
-    What it does:
     - Takes a query (like "What are the courses?")
     - Finds chunks that are similar to the query
     - Returns the most relevant chunks
 
-    How it works:
     - Uses "vector search" which compares embeddings (lists of numbers)
     - Similar embeddings = similar meaning
     - Returns chunks sorted by similarity score
     """
 
-    def __init__(self, collection, vector_index_name, vector_limit=5,
-                 num_candidates=100, min_score=0.2):
+    def __init__(self, collection):
         """
         Set up the vector search service.
 
         Args:
-        collection: The MongoDB collection to search in
-        vector_index_name: Name of the vector index (set up in MongoDB)
-        vector_limit: How many results to return (default 5)
-        num_candidates: How many to consider before filtering (default 100)
-        min_score: Minimum similarity score to accept (default 0.2)
+            collection: The MongoDB collection to search in
         """
-
-        # Save the MongoDB collection
         self.collection = collection
-
-        # Save the index name
-        self.vector_index_name = vector_index_name
-
-        # How many results to return
-        self.vector_limit = vector_limit
-
-        # How many candidates to consider
-        self.num_candidates = num_candidates
-
-        # Minimum score (0.0 to 1.0, where 1.0 is perfect match)
-        self.min_score = min_score
+        self.vector_index_name = config.VECTOR_INDEX_NAME
+        self.vector_limit = config.VECTOR_LIMIT
+        self.num_candidates = config.VECTOR_NUM_CANDIDATES
+        self.min_score = config.MIN_VECTOR_SCORE
 
     def search(self, query_embedding):
         """
@@ -81,6 +67,8 @@ class VectorSearchService:
                     "_id": 0,  # 0 = exclude _id
                     "title": 1,  # Include title
                     "text": 1,  # Include text
+                    "sourceUrl": 1,  # Include source URL
+                    "sourceName": 1,  # Include source name
                     "score": {"$meta": "vectorSearchScore"}  # Include similarity score
                 }
             }

@@ -117,9 +117,6 @@ class KnowledgeStore:
         """
         Delete all chunks from a specific source by source name.
 
-        This is used to remove old chunks before saving new ones from the same source
-        (prevents duplicates and stale data).
-
         Args:
             source_name: Name of the source (like "Student Handbook" or "TUS Homepage")
 

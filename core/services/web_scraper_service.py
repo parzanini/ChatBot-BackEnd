@@ -1,7 +1,7 @@
 """Web Scraper Service - Extract links from web pages
 
 This module provides functionality to extract all sub-links from a given URL.
-For courses, it handles pagination by looping through sf_paged parameter.
+For courses, it handles pagination by looping through page_number parameter.
 """
 
 from urllib.parse import urljoin, urlparse
@@ -24,6 +24,12 @@ def extract_and_process_links():
     5. Print progress and results
 
     To add more URLs, just add them to the urls_to_scrape array below.
+
+    Returns:
+        dict: Contains statistics about the scraping operation
+            - "success_count": Number of pages successfully processed
+            - "error_count": Number of pages that failed to process
+            - "total_pages": Total number of unique pages found
     """
     # Remove existing website chunks before scraping to avoid stale data
     try:
@@ -76,7 +82,7 @@ def extract_and_process_links():
             max_pages = config.get("max_pages", 70)
             for page_num in range(1, max_pages + 1):
                 pages_to_fetch.append({
-                    "url": f"{url}?results-id=751&view-mode=table&sf_paged={page_num}",
+                    "url": f"{url}?results-id=751&view-mode=table&page_number={page_num}",
                     "page_num": page_num
                 })
         else:
@@ -150,6 +156,13 @@ def extract_and_process_links():
     print(f"Successfully processed: {success_count}")
     print(f"Failed: {error_count}")
     print('='*60)
+
+    # Return statistics
+    return {
+        "success_count": success_count,
+        "error_count": error_count,
+        "total_pages": len(sorted_links)
+    }
 
 
 def process_course_page(url):

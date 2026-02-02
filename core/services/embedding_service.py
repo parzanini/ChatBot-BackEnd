@@ -9,7 +9,6 @@ What are embeddings?
 What does this file do?
 - Converts text chunks into embeddings using Google's AI
 """
-import hashlib
 import math
 import google.generativeai as genai
 
@@ -26,55 +25,16 @@ class EmbeddingService:
         4. Returns the numbers
         """
 
-    def __init__(self, model=None, dimensions=None, batch_size=None):
+    def __init__(self):
         """
         Set up the embedding service.
-
-        Args:
-            model: Which AI model to use
-            dimensions: How many numbers in each embedding
-            batch_size: How many texts to process at once
         """
-        # Use provided values or fall back to config defaults
-        if model is not None:
-            self.model = model
-        else:
-            self.model = config.EMBEDDING_MODEL
-
-        if dimensions is not None:
-            self.dimensions = dimensions
-        else:
-            self.dimensions = config.EMBEDDING_DIMENSIONS
-
-        if batch_size is not None:
-            self.batch_size = batch_size
-        else:
-            self.batch_size = config.BATCH_SIZE
-
-        # Create an empty cache (dictionary) to store embeddings
-        # Key = text hash, Value = embedding (list of numbers)
+        self.model = config.EMBEDDING_MODEL
+        self.dimensions = config.EMBEDDING_DIMENSIONS
+        self.batch_size = config.BATCH_SIZE
         self._cache = {}
+        genai.configure(api_key=config.GEMINI_API_KEY)
 
-        # Set up connection to Google's AI
-        if config.GEMINI_API_KEY:
-            genai.configure(api_key=config.GEMINI_API_KEY)
-
-    def _hash_text(self, text):
-        """
-        Create a unique ID for this text.
-        This ID as a key to store/retrieve embeddings from the cache.
-
-        Args:
-            text: The text to create an ID for
-
-        Returns:
-            A unique string (hash) representing this text
-        """
-        # Convert text to bytes, then create a hash
-        text_bytes = text.encode('utf-8')
-        hash_object = hashlib.sha256(text_bytes)
-        hash_string = hash_object.hexdigest()
-        return hash_string
 
     def embed_single(self, text, task_type="retrieval_document"):
         """
@@ -94,15 +54,9 @@ class EmbeddingService:
         Returns:
             A list of numbers (the embedding)
         """
-        # Step 1: Create a unique ID for this text
-        cache_key = self._hash_text(text)
-
-        # Step 2: Check if we've already processed this text
-        if cache_key in self._cache:
-            saved_embedding = self._cache[cache_key]
-            return saved_embedding
-
-        # Step 3: If text have not been seen before, call the API
+        # Step 1: Check if we've already processed this text
+        if text in self._cache:
+            return self._cache[text]
         try:
             # Call Google's AI to convert text to numbers
             result = genai.embed_content(
@@ -118,7 +72,7 @@ class EmbeddingService:
             normalized_embedding = normalize_vector(raw_embedding)
 
             # Step 5: Save it in the cache for next time
-            self._cache[cache_key] = normalized_embedding
+            self._cache[text] = normalized_embedding
 
             # Step 6: Return the embedding
             return normalized_embedding
@@ -129,13 +83,7 @@ class EmbeddingService:
     def embed_chunks(self, chunks, titles=None, task_type="retrieval_document"):
         """
         Convert multiple pieces of text into embeddings.
-
-        This processes each chunk one at a time. The cache helps speed things up
-        if text seen before.
-
-        IMPORTANT: If titles are provided, they are prepended to chunks before embedding.
-        This significantly improves retrieval accuracy by including semantic context.
-        Format: "Title\n\nContent"
+        This processes each chunk one at a time.
 
         Steps:
         1. Create an empty list to store all embeddings
@@ -168,7 +116,7 @@ class EmbeddingService:
             if titles and i < len(titles):
                 # Prepend title to chunk for better semantic context
                 # This helps retrieval find the right chunks when users ask specific questions
-                # Example: "Computing with AI – BSc (Hons)\n\nContact Details: Mary Ryan..."
+                # Example: "Computing with AI – BSc (Hons)\n\nContact Details: Carol Rainsford..."
                 text_to_embed = f"{titles[i]}\n\n{chunk}"
             else:
                 # No title available, just use the chunk
@@ -199,9 +147,8 @@ class EmbeddingService:
         Get information about the cache.
 
         Returns:
-            A dictionary with:
             - How many embeddings are cached
-            - Which model we're using
+            - Which model is being used
             - How many dimensions in each embedding
             - The batch size setting
         """
@@ -226,7 +173,7 @@ def normalize_vector(values):
     """
     Make a list of numbers have a total length of 1.
 
-    Why? This makes comparing different vectors more accurate.
+    This makes comparing different vectors more accurate.
     It's like converting all measurements to the same scale.
 
     How it works:

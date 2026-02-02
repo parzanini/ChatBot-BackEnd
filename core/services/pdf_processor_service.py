@@ -91,14 +91,6 @@ class PDFProcessorService:
         3. Create embeddings
         4. Save to database
 
-        Steps explained:
-        - Extract all text from the PDF
-        - Make sure it's not empty
-        - Split into small chunks with titles
-        - Convert chunks to embeddings (numbers)
-        - Save everything to MongoDB
-        - Return summary
-
         Args:
             pdf_path: Where the PDF file is located
             source_name: A friendly name for this PDF (like "Student Handbook 2025")

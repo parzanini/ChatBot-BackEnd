@@ -1,9 +1,9 @@
 """Views - Chatbot endpoints
 
 This file contains the following endpoints:
-1. /api/ask/         - Ask questions to the chatbot
-2. /api/upload_pdf/  - Upload and process PDF files
-3. /api/scrape_url/  - Scrape and process web pages
+1. /api/ask/              - Ask questions to the chatbot
+2. /api/upload_pdf/       - Upload and process PDF files
+3. /api/index_database/   - Full database indexer (web scraping + PDF folder indexing)
 
 """
 import json
@@ -18,7 +18,7 @@ from django.views.decorators.http import require_POST
 from mongoengine.connection import get_db
 
 from core import config
-from core.services.embedding_service import EmbeddingService, normalize_vector
+from core.services.embedding_service import normalize_vector
 from core.services.pdf_processor_service import PDFProcessorService
 from core.services.storage_service import KnowledgeStore
 from core.services.vector_search_service import VectorSearchService
@@ -27,13 +27,6 @@ from core.services.web_scraper_service import extract_and_process_links
 # Set up Google's AI once when the server starts
 genai.configure(api_key=config.GEMINI_API_KEY)
 
-# Load settings from config file (easier to change in one place)
-MODEL_NAME = config.GEMINI_MODEL
-COLLECTION = config.MONGODB_COLLECTION
-VECTOR_INDEX_NAME = config.VECTOR_INDEX_NAME
-VECTOR_LIMIT = config.VECTOR_LIMIT
-VECTOR_NUM_CANDIDATES = config.VECTOR_NUM_CANDIDATES
-MIN_VECTOR_SCORE = config.MIN_VECTOR_SCORE
 
 # ------------------------------ Ask Endpoint ------------------------------ #
 @csrf_exempt  # Allow API requests without CSRF token
@@ -79,13 +72,13 @@ def ask(request):
     # Remove spaces from beginning and end
     user_query = user_query.strip()
 
-    # STEP 3: Gather information about the query (Admin only)
+    # STEP 3: Gather information about the query (for debugging)
 
-    adm_info = {
+    debug_info = {
         "query": user_query,
-        "collection": COLLECTION,
-        "vector_index": VECTOR_INDEX_NAME,
-        "min_vector_score": MIN_VECTOR_SCORE,
+        "collection": config.MONGODB_COLLECTION,
+        "vector_index": config.VECTOR_INDEX_NAME,
+        "min_vector_score": config.MIN_VECTOR_SCORE,
         "matches": 0,
         "index_names": [],
         "total_docs": None,
@@ -113,26 +106,26 @@ def ask(request):
     collection_names = database.list_collection_names()
 
     # Check if our collection is in the list
-    if COLLECTION not in collection_names:
-        error_message = f"Collection '{COLLECTION}' not found."
+    if config.MONGODB_COLLECTION not in collection_names:
+        error_message = f"Collection '{config.MONGODB_COLLECTION}' not found."
         return JsonResponse({"error": error_message}, status=404)
 
     # Get the collection
-    collection = database[COLLECTION]
+    collection = database[config.MONGODB_COLLECTION]
 
     # STEP 6: Get some stats about the collection (For admin info)
     try:
         # Count how many documents are in the collection
-        adm_info["total_docs"] = collection.estimated_document_count()
+        debug_info["total_docs"] = collection.estimated_document_count()
 
         # Get list of indexes
-        all_indexes = list(collection.list_indexes())
-        index_names = []
-        for index in all_indexes:
+        collection_indexes = list(collection.list_indexes())
+        index_name_list = []
+        for index in collection_indexes:
             name = index.get("name")
             if name:
-                index_names.append(name)
-        adm_info["index_names"] = index_names
+                index_name_list.append(name)
+        debug_info["index_names"] = index_name_list
 
     except Exception as error:
         # If this fails,
@@ -158,10 +151,10 @@ def ask(request):
         query_embedding = normalize_vector(raw_embedding)
 
         # Calculate how long it took (in milliseconds)
-        embed_end_time = time.time()
-        embed_duration_seconds = embed_end_time - embed_start_time
-        embed_duration_ms = int(round(embed_duration_seconds * 1000))
-        adm_info["embedding_time_ms"] = embed_duration_ms
+        embedding_end_time = time.time()
+        embedding_duration_seconds = embedding_end_time - embed_start_time
+        embedding_duration_ms = int(round(embedding_duration_seconds * 1000))
+        debug_info["embedding_time_ms"] = embedding_duration_ms
 
     except Exception as error:
         # Embedding generation failed!
@@ -173,26 +166,20 @@ def ask(request):
     search_start_time = time.time()
 
     # Create a search service
-    search_service = VectorSearchService(
-        collection=collection,
-        vector_index_name=VECTOR_INDEX_NAME,
-        vector_limit=VECTOR_LIMIT,
-        num_candidates=VECTOR_NUM_CANDIDATES,
-        min_score=MIN_VECTOR_SCORE
-    )
+    search_service = VectorSearchService(collection=collection)
 
     try:
         # Search for similar documents
         matching_docs = search_service.search(query_embedding)
 
         # Calculate how long it took
-        search_end_time = time.time()
-        search_duration_seconds = search_end_time - search_start_time
-        search_duration_ms = int(round(search_duration_seconds * 1000))
-        adm_info["vector_time_ms"] = search_duration_ms
+        vector_search_end_time = time.time()
+        vector_search_duration_seconds = vector_search_end_time - search_start_time
+        vector_search_duration_ms = int(round(vector_search_duration_seconds * 1000))
+        debug_info["vector_time_ms"] = vector_search_duration_ms
 
         # Save debug info
-        adm_info["candidate_count"] = len(matching_docs)
+        debug_info["candidate_count"] = len(matching_docs)
 
         # Get similarity scores for each document
         similarity_scores = []
@@ -200,17 +187,17 @@ def ask(request):
             score = doc.get("score", 0.0)
             score_rounded = round(float(score), 4)
             similarity_scores.append(score_rounded)
-        adm_info["similarities"] = similarity_scores
+        debug_info["similarities"] = similarity_scores
 
         # Get the top score if any documents found
         if len(matching_docs) > 0:
             top_doc = matching_docs[0]
             top_score = top_doc.get("score", 0.0)
-            adm_info["top_score"] = round(float(top_score), 4)
+            debug_info["top_score"] = round(float(top_score), 4)
 
         # Check if we filtered out results due to low scores
         if len(matching_docs) == 0:
-            adm_info["low_score_filtered"] = True
+            debug_info["low_score_filtered"] = True
 
     except Exception as error:
         # Search failed!
@@ -226,6 +213,8 @@ def ask(request):
         # Get the text and title from this document
         text = document.get("text")
         title = document.get("title")
+        source_url = document.get("sourceUrl")
+        source_name = document.get("sourceName")
 
         # Use empty string if missing
         if not text:
@@ -245,18 +234,21 @@ def ask(request):
             # Add to sources list (to return to user)
             score = document.get("score", 0.0)
             score_rounded = round(float(score), 4)
+
             source_info = {
                 "title": title,
+                "source_name": source_name,
+                "url": source_url,
                 "score": score_rounded
             }
             sources.append(source_info)
 
             # Add title to debug info
             title_for_debug = title if title else "(untitled)"
-            adm_info["chunk_titles"].append(title_for_debug)
+            debug_info["chunk_titles"].append(title_for_debug)
 
     # Save number of matches
-    adm_info["matches"] = len(matching_docs)
+    debug_info["matches"] = len(matching_docs)
 
     # STEP 10: Check if we found any relevant documents
     if len(matching_docs) == 0:
@@ -264,13 +256,13 @@ def ask(request):
         end_time = time.time()
         total_seconds = end_time - start_time
         total_ms = int(round(total_seconds * 1000))
-        adm_info["total_time_ms"] = total_ms
+        debug_info["total_time_ms"] = total_ms
 
         # Return "not found" response
         response_data = {
             "answer": "I could not find relevant information in the knowledge base.",
             "sources": [],
-            "debug": adm_info
+            "debug": debug_info
         }
 
         return JsonResponse(response_data, status=200)
@@ -294,7 +286,7 @@ Context:
     # STEP 13: Ask Google's AI to generate an answer
     try:
         # Create AI model
-        ai_model = genai.GenerativeModel(MODEL_NAME)
+        ai_model = genai.GenerativeModel(config.GEMINI_MODEL)
 
         # Generate answer
         ai_response = ai_model.generate_content(prompt)
@@ -318,13 +310,13 @@ Context:
     end_time = time.time()
     total_seconds = end_time - start_time
     total_ms = int(round(total_seconds * 1000))
-    adm_info["total_time_ms"] = total_ms
+    debug_info["total_time_ms"] = total_ms
 
     # Create response
     response_data = {
         "answer": answer_text,
         "sources": sources,
-        "debug": adm_info
+        "debug": debug_info
     }
 
     # STEP 15: Return the response
@@ -464,31 +456,66 @@ def upload_pdf(request):
         error_msg = f"Failed to process PDF: {str(error)}"
         return JsonResponse({"success": False, "error": error_msg}, status=500)
 
-# ------------------------------ URL Scrape Endpoint ------------------------------ #
+# ------------------------------ Index Database Endpoint ------------------------------ #
 @csrf_exempt  # Allow API requests without CSRF token
-def scrape_url(request):
+def index_database(request):
     """
-    API Endpoint: Scrape and process a web page.
+    API Endpoint: Full database indexer.
 
-    What this does:
-    1. Get a list of links to be scraped from web_scraper_service.py
-    2. Downloads the web page
-    3. Extracts the main content (removes menus, ads, etc.)
-    4. Processes it (create chunks, generate embeddings)
-    5. Saves chunks to MongoDB
-    6. Returns success or error message
+    This endpoint reindexes the entire knowledge base by:
+    1. Scraping all configured web pages from TUS website
+    2. Processing PDF files from a configured folder (future feature)
+    3. Creating chunks from all content
+    4. Generating embeddings for all chunks
+    5. Saving everything to MongoDB with vector search index
+
+    This is a complete rebuild of the knowledge base.
 
     How to use (example):
-        GET /api/scrape_url/
+        GET /api/index_database/
 
     Returns:
-        JSON with success status and number of chunks created
+        JSON with success status, pages indexed, pages failed, and total time
     """
     # Remember time
     start_time = time.time()
-    print("=== URL Scrape Request Started ===")
+    print("=== Database Indexing Started ===")
 
-    # STEP 1: Get the list of links to scrape
-    print("STEP 1: Extracting links from configured URLs...")
-    extract_and_process_links()
+    try:
+        # STEP 1: Get the list of links to scrape
+        print("STEP 1: Extracting links from configured URLs...")
+        scrape_stats = extract_and_process_links()
 
+        # STEP 2: Calculate total time
+        end_time = time.time()
+        total_seconds = end_time - start_time
+        total_time = round(total_seconds, 2)
+
+        print(f"=== Database Indexing Completed Successfully ===")
+        print(f"Total processing time: {total_time} seconds")
+
+        # STEP 3: Return success response
+        response_data = {
+            "success": True,
+            "message": "Database indexing completed successfully",
+            "pages_indexed": scrape_stats["success_count"],
+            "pages_failed": scrape_stats["error_count"],
+            "total_pages": scrape_stats["total_pages"],
+            "processing_time_seconds": total_time
+        }
+        return JsonResponse(response_data, status=200)
+
+    except Exception as error:
+        print(f"Error during database indexing: {str(error)}")
+        error_msg = f"Failed to index database: {str(error)}"
+
+        # Calculate time even on error
+        end_time = time.time()
+        total_seconds = end_time - start_time
+        total_time = round(total_seconds, 2)
+
+        return JsonResponse({
+            "success": False,
+            "error": error_msg,
+            "processing_time_seconds": total_time
+        }, status=500)
