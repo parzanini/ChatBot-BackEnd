@@ -11,7 +11,7 @@ import os
 import tempfile
 import time
 
-import google.generativeai as genai
+from google import genai
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -24,8 +24,8 @@ from core.services.storage_service import KnowledgeStore
 from core.services.vector_search_service import VectorSearchService
 from core.services.web_scraper_service import extract_and_process_links
 
-# Set up Google's AI once when the server starts
-genai.configure(api_key=config.GEMINI_API_KEY)
+# Set up Google's AI client once when the server starts
+genai_client = genai.Client(api_key=config.GEMINI_API_KEY)
 
 
 # ------------------------------ Ask Endpoint ------------------------------ #
@@ -138,14 +138,13 @@ def ask(request):
         embed_start_time = time.time()
 
         # Call Google's AI to convert the question to numbers
-        embedding_result = genai.embed_content(
+        embedding_result = genai_client.models.embed_content(
             model=config.EMBEDDING_MODEL,
-            content=user_query,
-            task_type="retrieval_query"
+            contents=user_query
         )
 
         # Get the embedding from the result
-        raw_embedding = embedding_result['embedding']
+        raw_embedding = embedding_result.embeddings[0].values
 
         # Normalize it (make it length 1)
         query_embedding = normalize_vector(raw_embedding)
@@ -285,11 +284,11 @@ Context:
 
     # STEP 13: Ask Google's AI to generate an answer
     try:
-        # Create AI model
-        ai_model = genai.GenerativeModel(config.GEMINI_MODEL)
-
         # Generate answer
-        ai_response = ai_model.generate_content(prompt)
+        ai_response = genai_client.models.generate_content(
+            model=config.GEMINI_MODEL,
+            contents=prompt
+        )
 
         # Get the text from the response
         if hasattr(ai_response, "text"):

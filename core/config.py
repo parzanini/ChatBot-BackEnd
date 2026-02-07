@@ -11,13 +11,13 @@ import os
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Which Gemini model to use for generating answers
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
 
 # Which model to use for creating embeddings
-EMBEDDING_MODEL = "models/text-embedding-004"
+EMBEDDING_MODEL = "models/gemini-embedding-001"
 
-# How many numbers are in each embedding (768 is standard for this model)
-EMBEDDING_DIMENSIONS = 768
+# How many numbers are in each embedding (3072 is standard for gemini-embedding-001)
+EMBEDDING_DIMENSIONS = 3072
 
 # How many text chunks to process at once (bigger = faster but uses more memory)
 BATCH_SIZE = 32

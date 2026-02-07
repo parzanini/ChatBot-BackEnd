@@ -19,7 +19,7 @@ pdfplumber
 langchain-text-splitters
 
 # Gemini API
-google-generativeai
+google-genai
 
 # Web scraping
 requests

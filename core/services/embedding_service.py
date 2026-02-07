@@ -10,7 +10,7 @@ What does this file do?
 - Converts text chunks into embeddings using Google's AI
 """
 import math
-import google.generativeai as genai
+from google import genai
 
 from core import config
 
@@ -33,7 +33,7 @@ class EmbeddingService:
         self.dimensions = config.EMBEDDING_DIMENSIONS
         self.batch_size = config.BATCH_SIZE
         self._cache = {}
-        genai.configure(api_key=config.GEMINI_API_KEY)
+        self.client = genai.Client(api_key=config.GEMINI_API_KEY)
 
 
     def embed_single(self, text, task_type="retrieval_document"):
@@ -59,14 +59,13 @@ class EmbeddingService:
             return self._cache[text]
         try:
             # Call Google's AI to convert text to numbers
-            result = genai.embed_content(
+            result = self.client.models.embed_content(
                 model=self.model,
-                content=text,
-                task_type=task_type
+                contents=text
             )
 
             # Get the embedding from the result
-            raw_embedding = result['embedding']
+            raw_embedding = result.embeddings[0].values
 
             # Step 4: Normalize it (make all embeddings the same "size")
             normalized_embedding = normalize_vector(raw_embedding)
