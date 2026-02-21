@@ -25,3 +25,5 @@ google-genai
 requests
 beautifulsoup4
 
+# Code quality and maintainability
+pylint

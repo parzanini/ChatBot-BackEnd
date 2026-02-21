@@ -434,10 +434,10 @@ def upload_pdf(request):
         # STEP 8: Calculate how long it took
         end_time = time.time()
         total_seconds = end_time - start_time
-        total_time = round(total_seconds, 2)
+        total_minutes = round(total_seconds / 60, 2)
 
         print(f"=== PDF Upload Completed Successfully ===")
-        print(f"Total processing time: {total_time} seconds")
+        print(f"Total processing time: {total_minutes} minutes")
 
         # STEP 9: Return success response
         response_data = {
@@ -445,7 +445,7 @@ def upload_pdf(request):
             "message": "PDF processed successfully",
             "chunks_created": result["chunks_created"],
             "source_name": result["source_name"],
-            "processing_time_seconds": total_time
+            "processing_time_minutes": total_minutes
         }
         return JsonResponse(response_data, status=201)
 
@@ -501,12 +501,12 @@ def index_database(request):
             # Calculate time
             end_time = time.time()
             total_seconds = end_time - start_time
-            total_time = round(total_seconds, 2)
+            total_minutes = round(total_seconds / 60, 2)
 
             return JsonResponse({
                 "success": False,
                 "error": error_msg,
-                "processing_time_seconds": total_time
+                "processing_time_minutes": total_minutes
             }, status=500)
 
         # Get all PDF files from folder
@@ -518,12 +518,12 @@ def index_database(request):
 
             end_time = time.time()
             total_seconds = end_time - start_time
-            total_time = round(total_seconds, 2)
+            total_minutes = round(total_seconds / 60, 2)
 
             return JsonResponse({
                 "success": False,
                 "error": error_msg,
-                "processing_time_seconds": total_time
+                "processing_time_minutes": total_minutes
             }, status=500)
 
         # Filter for PDF files only
@@ -590,10 +590,10 @@ def index_database(request):
         # STEP 4: Calculate total time
         end_time = time.time()
         total_seconds = end_time - start_time
-        total_time = round(total_seconds, 2)
+        total_minutes = round(total_seconds / 60, 2)
 
         print(f"\n=== Database Indexing Completed Successfully ===")
-        print(f"Total processing time: {total_time} seconds")
+        print(f"Total processing time: {total_minutes} minutes")
 
         # STEP 5: Return success response
         response_data = {
@@ -605,7 +605,7 @@ def index_database(request):
             "pdfs_processed": pdf_success,
             "pdfs_failed": pdf_failures,
             "total_pdfs": total_pdfs,
-            "processing_time_seconds": total_time
+            "processing_time_minutes": total_minutes
         }
         return JsonResponse(response_data, status=200)
 
@@ -616,12 +616,12 @@ def index_database(request):
         # Calculate time even on error
         end_time = time.time()
         total_seconds = end_time - start_time
-        total_time = round(total_seconds, 2)
+        total_minutes = round(total_seconds / 60, 2)
 
         return JsonResponse({
             "success": False,
             "error": error_msg,
-            "processing_time_seconds": total_time
+            "processing_time_minutes": total_minutes
         }, status=500)
 
 # ------------------------------ CRUD ENDPOINTS ------------------------------ #
