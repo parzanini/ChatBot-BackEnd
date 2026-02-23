@@ -14,7 +14,7 @@ import time
 from google import genai
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_GET
 from mongoengine.connection import get_db
 
 from core import config
@@ -457,6 +457,7 @@ def upload_pdf(request):
 
 # ------------------------------ Index Database Endpoint ------------------------------ #
 @csrf_exempt  # Allow API requests without CSRF token
+@require_GET  # Only accept GET requests (not POST, PUT, etc.)
 def index_database(request):
     """
     API Endpoint: Full database indexer.
@@ -623,5 +624,11 @@ def index_database(request):
             "error": error_msg,
             "processing_time_minutes": total_minutes
         }, status=500)
+
+@csrf_exempt
+@require_GET
+#This endpoint will be used to keep the backend alive on Render. It simply returns a success message.
+def keep_alive(request):
+    return JsonResponse({"success": True, "message": "Backend is alive!"}, status=200)
 
 # ------------------------------ CRUD ENDPOINTS ------------------------------ #
