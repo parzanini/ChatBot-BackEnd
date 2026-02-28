@@ -97,8 +97,8 @@ def ask(request):
         database = get_db()
 
     except Exception as error:
-        # Connection failed!
-        error_message = f"MongoDB connection failed: {error}"
+        # Connection failed! Return friendly error message
+        error_message = "Sorry, the service is temporarily unavailable. Please try again shortly."
         return JsonResponse({"error": error_message}, status=500)
 
     # STEP 5: Make sure the collection exists
@@ -107,8 +107,8 @@ def ask(request):
 
     # Check if our collection is in the list
     if config.MONGODB_COLLECTION not in collection_names:
-        error_message = f"Collection '{config.MONGODB_COLLECTION}' not found."
-        return JsonResponse({"error": error_message}, status=404)
+        error_message = "Sorry, the service is temporarily unavailable. Please try again shortly."
+        return JsonResponse({"error": error_message}, status=500)
 
     # Get the collection
     collection = database[config.MONGODB_COLLECTION]
@@ -128,8 +128,8 @@ def ask(request):
         debug_info["index_names"] = index_name_list
 
     except Exception as error:
-        # If this fails,
-        error_message = f"Failed to get collection stats: {error}"
+        # If this fails, return friendly error message
+        error_message = "Sorry, the service is temporarily unavailable. Please try again shortly."
         return JsonResponse({"error": error_message}, status=500)
 
     # STEP 7: Convert the question to an embedding
@@ -156,8 +156,8 @@ def ask(request):
         debug_info["embedding_time_ms"] = embedding_duration_ms
 
     except Exception as error:
-        # Embedding generation failed!
-        error_message = f"Embedding generation failed: {error}"
+        # Embedding generation failed! Return friendly error message
+        error_message = "Sorry, the AI service is unavailable right now. Please try again shortly."
         return JsonResponse({"error": error_message}, status=502)
 
     # STEP 8: Search for similar chunks in the database
@@ -199,8 +199,8 @@ def ask(request):
             debug_info["low_score_filtered"] = True
 
     except Exception as error:
-        # Search failed!
-        error_message = f"Vector search failed: {error}"
+        # Search failed! Return friendly error message
+        error_message = "Sorry, the search service is unavailable right now. Please try again shortly."
         return JsonResponse({"error": error_message}, status=500)
 
     # STEP 9: Build context from the search results
@@ -257,9 +257,9 @@ def ask(request):
         total_ms = int(round(total_seconds * 1000))
         debug_info["total_time_ms"] = total_ms
 
-        # Return "not found" response
+        # Return "not found" response (UC2: Insufficient Information)
         response_data = {
-            "answer": "I could not find relevant information in the knowledge base.",
+            "answer": "I could not find relevant information in the knowledge base. Please try rephrasing your question or contact college support for assistance.",
             "sources": [],
             "debug": debug_info
         }
@@ -273,7 +273,7 @@ def ask(request):
     # STEP 12: Create a prompt for Google's AI
     # This tells the AI what to do
     prompt = f"""You are a helpful assistant. Use the provided context to answer the user's question.
-If the answer is not in the context, state that you do not have enough information.
+If the answer is not in the context, use the following answer: I could not find relevant information in the knowledge base. Please try rephrasing your question or contact college support for assistance.
 
 Question:
 {user_query}
@@ -301,8 +301,8 @@ Context:
             answer_text = "No answer generated."
 
     except Exception as error:
-        # AI call failed!
-        error_message = f"Gemini AI call failed: {error}"
+        # AI call failed! Return friendly error message (NFR-R01)
+        error_message = "Sorry, the AI service is unavailable right now. Please try again shortly."
         return JsonResponse({"error": error_message}, status=502)
 
     # STEP 14: Calculate total time and prepare response

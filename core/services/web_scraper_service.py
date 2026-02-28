@@ -2,6 +2,12 @@
 
 This module provides functionality to extract all sub-links from a given URL.
 For courses, it handles pagination by looping through sf_paged parameter in TUS Website.
+
+important notes:
+scheme = https
+netloc = tus.ie
+path = /courses/page
+Result: https://tus.ie/courses/page
 """
 
 from urllib.parse import urljoin, urlparse
@@ -10,6 +16,78 @@ from bs4 import BeautifulSoup
 from core.services.chunker_service import Chunker
 from core.services.embedding_service import EmbeddingService
 from core.services.storage_service import KnowledgeStore
+
+# Global set to track visited URLs and prevent duplicate scraping
+visited_urls = set()
+
+
+def discover_links_recursive(url, base_path, base_domain, max_depth=5, current_depth=0):
+    """
+    Recursively discover all links under a base path up to max depth.
+
+    This function fetches a page, extracts all links matching the base path,
+    and recursively follows those links to find nested sublinks.
+    Uses the global visited_urls set to prevent scraping the same URL twice.
+
+    Args:
+        url: The URL to fetch and extract links from
+        base_path: The base path to filter links (e.g., "/courses")
+        base_domain: The domain to filter (e.g., "tus.ie")
+        max_depth: Maximum recursion depth (default 5)
+        current_depth: Current recursion depth (incremented in recursion)
+
+    Returns:
+        set: All discovered links matching the base path
+    """
+    # Stop recursion if max depth reached
+    if current_depth >= max_depth:
+        return set()
+
+    # Stop if URL already visited
+    if url in visited_urls:
+        return set()
+
+    discovered_links = set()
+    visited_urls.add(url)
+
+    try:
+        # Fetch the page
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        # Extract all links from this page
+        for link in soup.find_all('a', href=True):
+            href = link['href']
+            absolute_url = urljoin(url, href)
+            parsed_url = urlparse(absolute_url)
+
+            # Check if link is within domain and base path
+            if parsed_url.netloc == base_domain:
+                link_path = parsed_url.path.rstrip('/')
+
+                # Only include links that match base path and aren't the base path itself
+                if link_path and link_path.startswith(base_path) and link_path != base_path:
+                    clean_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
+                    if parsed_url.query:
+                        clean_url += f"?{parsed_url.query}"
+
+                    # Add link if not already discovered
+                    if clean_url not in discovered_links and clean_url not in visited_urls:
+                        discovered_links.add(clean_url)
+
+                        # Recursively discover links from this page
+                        nested_links = discover_links_recursive(
+                            clean_url, base_path, base_domain, max_depth, current_depth + 1
+                        )
+                        discovered_links.update(nested_links)
+
+    except requests.exceptions.RequestException as error:
+        print(f"Error fetching {url}: {error}")
+    except Exception as error:
+        print(f"Error processing {url}: {error}")
+
+    return discovered_links
 
 
 def extract_and_process_links():
@@ -47,11 +125,87 @@ def extract_and_process_links():
             "base_path": "/courses"
         },
         {
-            "url": "https://tus.ie/admissions/midwest/",
+            "url": "https://tus.ie/admissions/",
             "paginated": False,
-            "base_path": "/admissions/midwest"
-        }
-        # Add more URLs here as needed, for example:
+            "base_path": "/admissions"
+        },
+        {
+            "url":"https://tus.ie/contact-us/",
+            "paginated": False,
+            "base_path": "/contact-us"
+        },
+        {
+            "url":"https://tus.ie/apprenticeships/",
+            "paginated": False,
+            "base_path": "/apprenticeships"
+        },
+        {
+            "url":"https://tus.ie/global/",
+            "paginated": False,
+            "base_path": "/global"
+        },
+        {
+            "url":"https://tus.ie/student-support/",
+            "paginated": False,
+            "base_path": "/student-support"
+        },
+        {
+            "url":"https://tus.ie/rdi/",
+            "paginated": False,
+            "base_path": "/rdi"
+    },
+        {
+            "url":"https://tus.ie/governance/",
+            "paginated": False,
+            "base_path": "/governance"
+        },
+        {
+            "url":"https://tus.ie/esvh/",
+            "paginated": False,
+            "base_path": "/esvh"
+        },
+        {
+            "url":"https://tus.ie/sport/",
+            "paginated": False,
+            "base_path": "/sport"
+        },
+        {
+            "url":"https://tus.ie/business-hospitality-humanities/",
+            "paginated": False,
+            "base_path": "/business-hospitality-humanities"
+        },
+            {
+            "url":"https://tus.ie/engineering-built-environment-informatics/",
+            "paginated": False,
+            "base_path": "/engineering-built-environment-informatics"
+        },
+        {
+            "url":"https://tus.ie/lsad/",
+            "paginated": False,
+            "base_path": "/lsad"
+        },
+            {
+            "url":"https://tus.ie/sciences-health-tech/",
+            "paginated": False,
+            "base_path": "/sciences-health-tech"
+        },
+            {
+            "url":"https://tus.ie/global/international-admissions/fees-and-scholarships/",
+            "paginated": False,
+            "base_path": "/global/international-admissions/fees-and-scholarships"
+        },
+            {
+            "url":"https://tus.ie/grants-fees/",
+            "paginated": False,
+            "base_path": "/grants-fees"
+        },
+            {
+            "url":"https://tus.ie/student-support/",
+            "paginated": False,
+            "base_path": "/student-support"
+        },
+
+        # Add more URLs here as needes
     ]
 
     print(f"\n{'*'*60}")
@@ -73,60 +227,51 @@ def extract_and_process_links():
         if paginated:
             print(f"Pagination: YES (up to {config['max_pages']} pages)")
         else:
-            print(f"Pagination: NO (single page)")
+            print(f"Pagination: NO (recursive sublink discovery)")
         print('='*60)
 
-        # Determine which pages to fetch
-        pages_to_fetch = []
+        # Handle paginated URLs (courses)
         if paginated:
             max_pages = config.get("max_pages", 70)
             for page_num in range(1, max_pages + 1):
-                pages_to_fetch.append({
-                    "url": f"{url}?results-id=751&view-mode=table&sf_paged={page_num}",
-                    "page_num": page_num
-                })
+                page_url = f"{url}?results-id=751&view-mode=table&sf_paged={page_num}"
+                print(f"Fetching page {page_num}...", end=" ")
+
+                try:
+                    response = requests.get(page_url, timeout=10)
+                    response.raise_for_status()
+                    soup = BeautifulSoup(response.content, 'html.parser')
+
+                    # Extract links from paginated page
+                    page_links = 0
+                    for link in soup.find_all('a', href=True):
+                        href = link['href']
+                        absolute_url = urljoin(page_url, href)
+                        parsed_url = urlparse(absolute_url)
+
+                        if parsed_url.netloc == base_domain:
+                            link_path = parsed_url.path.rstrip('/')
+
+                            if link_path and link_path.startswith(base_path) and link_path != base_path:
+                                clean_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
+                                if parsed_url.query:
+                                    clean_url += f"?{parsed_url.query}"
+                                all_links.add(clean_url)
+                                page_links += 1
+
+                    print(f"Found {page_links} links")
+
+                except requests.exceptions.RequestException as error:
+                    print(f"Error: {error}")
+                except Exception as error:
+                    print(f"Error: {error}")
+
+        # Handle non-paginated URLs (recursively discover sublinks)
         else:
-            pages_to_fetch.append({"url": url, "page_num": 1})
-
-        # Fetch and extract links from all pages
-        for page_info in pages_to_fetch:
-            page_url = page_info["url"]
-            page_num = page_info["page_num"]
-
-            try:
-                if paginated:
-                    print(f"Fetching page {page_num}...", end=" ")
-                else:
-                    print(f"Fetching page...", end=" ")
-                # Get the page content, timeout after 10 seconds
-                response = requests.get(page_url, timeout=10)
-                response.raise_for_status()
-                soup = BeautifulSoup(response.content, 'html.parser')
-
-                # Extract all links from this page using href attributes
-                page_links = 0
-                for link in soup.find_all('a', href=True):
-                    href = link['href']
-                    absolute_url = urljoin(page_url, href)
-                    parsed_url = urlparse(absolute_url)
-
-                    # Only process links within the same domain and base path
-                    if parsed_url.netloc == base_domain:
-                        link_path = parsed_url.path.rstrip('/') # Remove trailing slash
-
-                        if link_path and link_path.startswith(base_path) and link_path != base_path: # Exclude the base path itself
-                            clean_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
-                            if parsed_url.query:
-                                clean_url += f"?{parsed_url.query}"
-                            all_links.add(clean_url)
-                            page_links += 1
-
-                print(f"Found {page_links} links")
-
-            except requests.exceptions.RequestException as error:
-                print(f"Error: {error}")
-            except Exception as error:
-                print(f"Error: {error}")
+            print(f"Discovering sublinks recursively...", end=" ")
+            discovered = discover_links_recursive(url, base_path, base_domain, max_depth=5)
+            all_links.update(discovered)
+            print(f"Found {len(discovered)} links")
 
     # Process all discovered course pages
     sorted_links = sorted(list(all_links))
