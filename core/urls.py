@@ -7,6 +7,8 @@ urlpatterns = [
     path('upload_pdf/', views.upload_pdf, name='upload_pdf'),
     path('upload_pdf', views.upload_pdf, name='upload_pdf_no_slash'),
     path('index_database/', views.index_database, name='index_database'),
-    path('index_database', views.index_database, name='index_database_no_slash')
+    path('index_database', views.index_database, name='index_database_no_slash'),
+    path('keep_alive/', views.keep_alive, name='keep_alive'),
+    path('keep_alive', views.keep_alive, name='keep_alive_no_slash')
 ]
 
