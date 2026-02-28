@@ -269,15 +269,6 @@ Build Command: pip install -r requirements.txt
 Start Command: gunicorn chatbotbackend.wsgi:application --bind 0.0.0.0:$PORT
 ```
 
-### Environment Variables (Render)
-
-```
-GEMINI_API_KEY=your_key_here
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/
-DEBUG=False
-ALLOWED_HOSTS=yourdomain.onrender.com
-```
-
 ## 📝 License
 
 This project is part of the FYP (Final Year Project) at TUS.
