@@ -12,12 +12,15 @@ import tempfile
 import time
 
 from google import genai
+from django.contrib.auth import authenticate
+from django.contrib.auth.models import Group, User
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 from mongoengine.connection import get_db
 
 from core import config
+from core.models import AuthToken
 from core.services.embedding_service import normalize_vector
 from core.services.pdf_processor_service import PDFProcessorService
 from core.services.storage_service import KnowledgeStore
@@ -26,6 +29,9 @@ from core.services.web_scraper_service import extract_and_process_links
 
 # Set up Google's AI client once when the server starts
 genai_client = genai.Client(api_key=config.GEMINI_API_KEY)
+
+USER_ROLE = "USER"
+ADMIN_ROLE = "ADMIN"
 
 
 # ------------------------------ Ask Endpoint ------------------------------ #
@@ -632,3 +638,111 @@ def keep_alive(request):
     return JsonResponse({"success": True, "message": "Backend is alive!"}, status=200)
 
 # ------------------------------ CRUD ENDPOINTS ------------------------------ #
+
+@csrf_exempt
+@require_POST
+def register(request):
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return JsonResponse({"error": "Invalid JSON body."}, status=400)
+
+    email = str(payload.get("email", "")).strip().lower()
+    name = str(payload.get("name", "")).strip()
+    surname = str(payload.get("surname", "")).strip()
+    password = str(payload.get("password", ""))
+
+    if not email or not password:
+        return JsonResponse({"error": "email and password are required."}, status=400)
+
+    if len(password) < 6:
+        return JsonResponse({"error": "password must have at least 6 characters."}, status=400)
+
+    if User.objects.filter(email__iexact=email).exists() or User.objects.filter(username__iexact=email).exists():
+        return JsonResponse({"error": "email is already in use."}, status=409)
+
+    user = User.objects.create_user(
+        username=email,
+        email=email,
+        password=password,
+        first_name=name,
+        last_name=surname,
+    )
+
+    user_group, _ = Group.objects.get_or_create(name=USER_ROLE)
+    user.groups.add(user_group)
+
+    return JsonResponse(
+        {
+            "success": True,
+            "message": "User registered successfully.",
+            "user": {
+                "email": user.email,
+                "name": user.first_name,
+                "surname": user.last_name,
+                "role": USER_ROLE,
+            },
+        },
+        status=201,
+    )
+
+
+@csrf_exempt
+@require_POST
+def login(request):
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return JsonResponse({"error": "Invalid JSON body."}, status=400)
+
+    email = str(payload.get("email", "")).strip().lower()
+    password = str(payload.get("password", ""))
+
+    if not email or not password:
+        return JsonResponse({"error": "email and password are required."}, status=400)
+
+    user_by_email = User.objects.filter(email__iexact=email).first()
+
+    if not user_by_email:
+        return JsonResponse({"error": "Invalid credentials."}, status=401)
+
+    authenticated_user = authenticate(request, username=user_by_email.username, password=password)
+    if not authenticated_user:
+        return JsonResponse({"error": "Invalid credentials."}, status=401)
+
+    role = ADMIN_ROLE if authenticated_user.groups.filter(name=ADMIN_ROLE).exists() else USER_ROLE
+
+    AuthToken.objects.filter(user=authenticated_user).delete()
+    token = AuthToken.objects.create(user=authenticated_user)
+
+    return JsonResponse(
+        {
+            "success": True,
+            "token": token.key,
+            "user": {
+                "email": authenticated_user.email,
+                "name": authenticated_user.first_name,
+                "surname": authenticated_user.last_name,
+                "role": role,
+            },
+        },
+        status=200,
+    )
+
+
+@csrf_exempt
+@require_POST
+def logout(request):
+    authorization = request.headers.get("Authorization", "")
+    if not authorization.startswith("Bearer "):
+        return JsonResponse({"error": "Missing or invalid Authorization header."}, status=401)
+
+    token_key = authorization.split(" ", 1)[1].strip()
+    if not token_key:
+        return JsonResponse({"error": "Missing token."}, status=401)
+
+    deleted_count, _ = AuthToken.objects.filter(key=token_key).delete()
+    if deleted_count == 0:
+        return JsonResponse({"error": "Invalid token."}, status=401)
+
+    return JsonResponse({"success": True, "message": "Logged out successfully."}, status=200)

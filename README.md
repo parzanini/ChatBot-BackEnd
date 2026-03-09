@@ -101,6 +101,81 @@ SCRAPING_URLS = [
 
 ## 🔌 API Endpoints
 
+### 0. Authentication (Email + Password)
+
+Role policy:
+- `USER`: can self-sign up using `register`
+- `ADMIN`: created manually in DB
+
+#### Register
+
+**Endpoint**: `POST /api/register/`
+
+**Request**:
+```json
+{
+  "email": "user@example.com",
+  "name": "Ana",
+  "surname": "Silva",
+  "password": "strongpass123"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "User registered successfully.",
+  "user": {
+    "email": "user@example.com",
+    "name": "Ana",
+    "surname": "Silva",
+    "role": "USER"
+  }
+}
+```
+
+#### Login (shared endpoint for mobile and dashboard)
+
+**Endpoint**: `POST /api/login/`
+
+**Request**:
+```json
+{
+  "email": "user@example.com",
+  "password": "strongpass123"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "token": "<bearer_token>",
+  "user": {
+    "email": "user@example.com",
+    "name": "Ana",
+    "surname": "Silva",
+    "role": "USER"
+  }
+}
+```
+
+#### Logout
+
+**Endpoint**: `POST /api/logout/`
+
+**Headers**:
+- `Authorization: Bearer <token>`
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Logged out successfully."
+}
+```
+
 ### 1. Ask Chatbot a Question
 
 **Endpoint**: `POST /api/ask/`
