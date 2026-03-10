@@ -27,3 +27,8 @@ beautifulsoup4
 
 # Code quality and maintainability
 pylint
+
+# PostgreSQL support
+psycopg2-binary
+dj-database-url
+

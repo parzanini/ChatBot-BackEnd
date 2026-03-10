@@ -327,21 +327,36 @@ ChatBot-BackEnd/
 
 ### Deploy to Render
 
-1. **Push to GitHub**
+1. **Create PostgreSQL Database**
+- Go to [render.com](https://render.com)
+- Click **New** → **PostgreSQL**
+- Choose **Free** plan (500 MB, expires after 90 days but renewable)
+- Copy the **Internal Database URL** (starts with `postgresql://`)
+
+2. **Push to GitHub**
 ```bash
 git push origin main
 ```
 
-2. **Connect to Render**
+3. **Create Web Service**
 - Go to [render.com](https://render.com)
-- Create new Web Service
+- Click **New** → **Web Service**
 - Connect your GitHub repository
-- Set environment variables (GEMINI_API_KEY, MONGODB_URI)
+- Configure:
+  - **Build Command**: `pip install -r requirements.txt`
+  - **Start Command**: `gunicorn chatbotbackend.wsgi:application --bind 0.0.0.0:$PORT`
 
-3. **Configure Build & Start**
-```
-Build Command: pip install -r requirements.txt
-Start Command: gunicorn chatbotbackend.wsgi:application --bind 0.0.0.0:$PORT
+4. **Set Environment Variables**
+Add these in your web service settings:
+- `GEMINI_API_KEY`: Your Gemini API key
+- `MONGODB_URI`: Your MongoDB Atlas connection string
+- `DATABASE_URL`: The PostgreSQL Internal Database URL (from step 1)
+- `DJANGO_SECRET_KEY`: Your secret key
+
+5. **Run Migrations After First Deploy**
+Open the **Shell** tab in your Render web service and run:
+```bash
+python manage.py migrate
 ```
 
 ## 📝 License
