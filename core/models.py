@@ -19,3 +19,15 @@ class AuthToken(models.Model):
     def __str__(self):
         return f"{self.user_id}:{self.key[:8]}"
 
+
+class IndexDatabaseRun(models.Model):
+    success = models.BooleanField(default=False)
+    payload = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        status = "OK" if self.success else "ERROR"
+        return f"{status}:{self.created_at.isoformat()}"

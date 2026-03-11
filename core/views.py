@@ -20,7 +20,7 @@ from django.views.decorators.http import require_POST, require_GET
 from mongoengine.connection import get_db
 
 from core import config
-from core.models import AuthToken
+from core.models import AuthToken, IndexDatabaseRun
 from core.services.embedding_service import normalize_vector
 from core.services.pdf_processor_service import PDFProcessorService
 from core.services.storage_service import KnowledgeStore
@@ -488,6 +488,13 @@ def index_database(request):
     start_time = time.time()
     print("=== Database Indexing Started ===")
 
+    # This helper function saves the result of this run to the IndexDatabaseRun in the database
+    def persist_run(success_value, payload_value):
+        try:
+            IndexDatabaseRun.objects.create(success=success_value, payload=payload_value)
+        except Exception as db_error:
+            print(f"Warning: failed to save IndexDatabaseRun: {db_error}")
+
     try:
         # STEP 1: Delete existing PDF chunks
         print("\nSTEP 1: Deleting existing PDF chunks...")
@@ -510,11 +517,14 @@ def index_database(request):
             total_seconds = end_time - start_time
             total_minutes = round(total_seconds / 60, 2)
 
-            return JsonResponse({
+            response_data = {
                 "success": False,
                 "error": error_msg,
                 "processing_time_minutes": total_minutes
-            }, status=500)
+            }
+            # Save run result to database
+            persist_run(False, response_data)
+            return JsonResponse(response_data, status=500)
 
         # Get all PDF files from folder
         try:
@@ -527,11 +537,14 @@ def index_database(request):
             total_seconds = end_time - start_time
             total_minutes = round(total_seconds / 60, 2)
 
-            return JsonResponse({
+            response_data = {
                 "success": False,
                 "error": error_msg,
                 "processing_time_minutes": total_minutes
-            }, status=500)
+            }
+            # Save run result to database
+            persist_run(False, response_data)
+            return JsonResponse(response_data, status=500)
 
         # Filter for PDF files only
         pdf_files = [f for f in all_files if f.lower().endswith('.pdf')]
@@ -614,6 +627,7 @@ def index_database(request):
             "total_pdfs": total_pdfs,
             "processing_time_minutes": total_minutes
         }
+        persist_run(True, response_data)
         return JsonResponse(response_data, status=200)
 
     except Exception as error:
@@ -625,11 +639,14 @@ def index_database(request):
         total_seconds = end_time - start_time
         total_minutes = round(total_seconds / 60, 2)
 
-        return JsonResponse({
+        response_data = {
             "success": False,
             "error": error_msg,
             "processing_time_minutes": total_minutes
-        }, status=500)
+        }
+        # Save run result to database
+        persist_run(False, response_data)
+        return JsonResponse(response_data, status=500)
 
 @csrf_exempt
 @require_GET
