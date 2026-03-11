@@ -239,7 +239,7 @@ Role policy:
 
 ### 3. Index Database
 
-**Endpoint**: `GET /api/index_database/`
+**Endpoint**: `POST /api/index_database/`
 
 **Response**:
 ```json

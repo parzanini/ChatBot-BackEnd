@@ -204,6 +204,41 @@ def extract_and_process_links():
             "paginated": False,
             "base_path": "/student-support"
         },
+            {
+            "url":"https://tus.ie/registry/",
+            "paginated": False,
+            "base_path": "/registry"
+        },
+            {
+            "url":"https://tus.ie/exams/",
+            "paginated": False,
+            "base_path": "/exams"
+        },
+            {
+            "url":"https://tus.ie/events/",
+            "paginated": False,
+            "base_path": "/events"
+        },
+                {
+            "url":"https://tus.ie/exams/midlands/results-support/",
+            "paginated": False,
+            "base_path": "/exams/midlands/results-support"
+        },
+            {
+            "url":"https://tus.ie/exams/midlands/online-exam-booking/",
+            "paginated": False,
+            "base_path": "/exams/midlands/online-exam-booking"
+        },
+                {
+            "url":"https://tus.ie/exams/midwest/",
+            "paginated": False,
+            "base_path": "/exams/midwest"
+        },
+            {
+            "url":"https://tus.ie/counselling/",
+            "paginated": False,
+            "base_path": "/counselling"
+        },
 
         # Add more URLs here as needes
     ]

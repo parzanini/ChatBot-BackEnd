@@ -463,7 +463,7 @@ def upload_pdf(request):
 
 # ------------------------------ Index Database Endpoint ------------------------------ #
 @csrf_exempt  # Allow API requests without CSRF token
-@require_GET  # Only accept GET requests (not POST, PUT, etc.)
+@require_POST  # Only accept POST requests
 def index_database(request):
     """
     API Endpoint: Full database indexer.
@@ -479,7 +479,7 @@ def index_database(request):
     This is a complete rebuild of the knowledge base.
 
     How to use (example):
-        GET /api/index_database/
+        POST /api/index_database/
 
     Returns:
         JSON with success status, pages indexed, pages failed, PDFs processed, and total time
