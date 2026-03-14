@@ -653,8 +653,94 @@ def index_database(request):
 #This endpoint will be used to keep the backend alive on Render. It simply returns a success message.
 def keep_alive(request):
     return JsonResponse({"success": True, "message": "Backend is alive!"}, status=200)
+# ------------------------------ AUTH AND CRUD ENDPOINTS ------------------------------ #
 
-# ------------------------------ CRUD ENDPOINTS ------------------------------ #
+@csrf_exempt
+@require_GET
+def index_database_runs(request):
+    """Return the latest 20 index_database run results."""
+    try:
+        latest_runs = IndexDatabaseRun.objects.order_by("-created_at")[:20]
+
+        results = []
+        for run in latest_runs:
+            run_payload = run.payload if isinstance(run.payload, dict) else {}
+            created_at_value = run.created_at.isoformat() if run.created_at else None
+
+            results.append(
+                {
+                    "id": run.id,
+                    "created_at": created_at_value,
+                    "success": run.success,
+                    "message": run_payload.get("message"),
+                    "error": run_payload.get("error"),
+                    "pages_indexed": run_payload.get("pages_indexed"),
+                    "pages_failed": run_payload.get("pages_failed"),
+                    "total_pages": run_payload.get("total_pages"),
+                    "pdfs_processed": run_payload.get("pdfs_processed"),
+                    "pdfs_failed": run_payload.get("pdfs_failed"),
+                    "total_pdfs": run_payload.get("total_pdfs"),
+                    "processing_time_minutes": run_payload.get("processing_time_minutes"),
+                    "payload": run_payload,
+                }
+            )
+
+        return JsonResponse({"success": True, "results": results, "count": len(results)}, status=200)
+
+    except Exception as error:
+        error_message = "Failed to fetch index database run history."
+        return JsonResponse({"success": False, "error": error_message, "details": str(error)}, status=500)
+
+
+@csrf_exempt
+@require_GET
+def manual_uploads(request):
+    """Return all manually uploaded PDF sources grouped by source name."""
+    try:
+        database = get_db()
+        collection_names = database.list_collection_names()
+
+        if config.MONGODB_COLLECTION not in collection_names:
+            return JsonResponse({"success": True, "documents": [], "count": 0}, status=200)
+
+        collection = database[config.MONGODB_COLLECTION]
+
+        pipeline = [
+            {"$match": {"sourceType": "Manual Upload"}},
+            {
+                "$group": {
+                    "_id": "$sourceName",
+                    "chunks_count": {"$sum": 1},
+                    "upload_date": {"$min": "$createdAt"},
+                }
+            },
+            {"$sort": {"upload_date": -1, "_id": 1}},
+        ]
+
+        grouped_documents = list(collection.aggregate(pipeline))
+        documents = []
+
+        for item in grouped_documents:
+            upload_date = item.get("upload_date")
+            upload_date_value = upload_date.isoformat() if hasattr(upload_date, "isoformat") else None
+            source_name = item.get("_id") or ""
+
+            documents.append(
+                {
+                    "document_name": source_name,
+                    "source_name": source_name,
+                    "upload_date": upload_date_value,
+                    "file_type": "pdf",
+                    "file_size": None,
+                    "chunks_count": int(item.get("chunks_count", 0)),
+                }
+            )
+
+        return JsonResponse({"success": True, "documents": documents, "count": len(documents)}, status=200)
+
+    except Exception as error:
+        error_message = "Failed to fetch manual uploaded PDFs."
+        return JsonResponse({"success": False, "error": error_message, "details": str(error)}, status=500)
 
 @csrf_exempt
 @require_POST
