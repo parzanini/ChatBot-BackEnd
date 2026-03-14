@@ -256,6 +256,154 @@ Role policy:
 }
 ```
 
+### 4. Get Index Database Run History (Scrape TUS Website table)
+
+Returns the last 20 times the `index_database` endpoint was triggered, including whether each run succeeded, how many pages and PDFs were processed, and how long it took.
+
+**Endpoint**: `GET /api/index_database_runs/`
+
+**Response**:
+```json
+{
+  "success": true,
+  "count": 2,
+  "results": [
+    {
+      "id": 12,
+      "created_at": "2026-03-14T10:30:00.000000+00:00",
+      "success": true,
+      "message": "Database indexing completed successfully",
+      "error": null,
+      "pages_indexed": 51,
+      "pages_failed": 0,
+      "total_pages": 51,
+      "pdfs_processed": 3,
+      "pdfs_failed": 0,
+      "total_pdfs": 3,
+      "processing_time_minutes": 5.43,
+      "payload": { }
+    },
+    {
+      "id": 11,
+      "created_at": "2026-03-13T08:15:00.000000+00:00",
+      "success": false,
+      "message": null,
+      "error": "Failed to index database: connection timeout",
+      "pages_indexed": null,
+      "pages_failed": null,
+      "total_pages": null,
+      "pdfs_processed": null,
+      "pdfs_failed": null,
+      "total_pdfs": null,
+      "processing_time_minutes": 0.12,
+      "payload": { }
+    }
+  ]
+}
+```
+
+| Field | Description |
+|---|---|
+| `id` | Unique run ID |
+| `created_at` | When the run was triggered (ISO 8601) |
+| `success` | `true` if the run completed without errors |
+| `message` | Success message (null on failure) |
+| `error` | Error message (null on success) |
+| `pages_indexed` | Website pages successfully scraped |
+| `pages_failed` | Website pages that failed |
+| `total_pages` | Total website pages found |
+| `pdfs_processed` | PDFs from the PDFs folder successfully indexed |
+| `pdfs_failed` | PDFs from the PDFs folder that failed |
+| `total_pdfs` | Total PDFs found in the PDFs folder |
+| `processing_time_minutes` | Total run duration in minutes |
+| `payload` | Full raw payload stored at the time of the run |
+
+---
+
+### 5. Get Manually Uploaded PDFs (Knowledge Base Management table)
+
+Returns all PDF documents that were uploaded via the `upload_pdf` endpoint.
+Each entry represents one unique PDF, grouped by its source name, with the upload date and total chunk count.
+
+**Endpoint**: `GET /api/manual_uploads/`
+
+**Response**:
+```json
+{
+  "success": true,
+  "count": 2,
+  "documents": [
+    {
+      "document_name": "Student Handbook 2025",
+      "source_name": "Student Handbook 2025",
+      "upload_date": "2026-03-10T14:22:00.000000+00:00",
+      "file_type": "pdf",
+      "file_size": null,
+      "chunks_count": 42
+    },
+    {
+      "document_name": "TUS Academic Calendar",
+      "source_name": "TUS Academic Calendar",
+      "upload_date": "2026-03-01T09:05:00.000000+00:00",
+      "file_type": "pdf",
+      "file_size": null,
+      "chunks_count": 17
+    }
+  ]
+}
+```
+
+| Field | Description |
+|---|---|
+| `document_name` | The name of the PDF (same as `source_name`) |
+| `source_name` | The name used when the PDF was uploaded |
+| `upload_date` | Earliest chunk creation date — effectively the upload date (ISO 8601) |
+| `file_type` | Always `"pdf"` for manually uploaded documents |
+| `file_size` | Not stored — always `null` |
+| `chunks_count` | Number of text chunks the PDF was split into |
+
+> **Note:** `file_size` is `null` because file size is not persisted in the MongoDB chunks collection. It can be added to the upload flow in the future if needed.
+
+#### Delete a manually uploaded PDF
+
+Deletes one PDF that was previously uploaded through the `upload_pdf` endpoint.
+Only documents with `sourceType = "Manual Upload"` are affected, so PDFs indexed from the configured folder are not removed by this endpoint.
+
+**Endpoint**: `DELETE /api/manual_uploads/`
+
+**Request**:
+```json
+{
+  "source_name": "Student Handbook 2025"
+}
+```
+
+**Success Response**:
+```json
+{
+  "success": true,
+  "message": "Manual uploaded PDF deleted successfully.",
+  "source_name": "Student Handbook 2025",
+  "deleted_chunks": 42
+}
+```
+
+**Not Found Response**:
+```json
+{
+  "success": false,
+  "error": "No manually uploaded PDF found with source_name 'Student Handbook 2025'."
+}
+```
+
+**Validation Error Response**:
+```json
+{
+  "success": false,
+  "error": "source_name is required."
+}
+```
+
 ## 📁 Project Structure
 
 ```
@@ -369,4 +517,4 @@ Created as an academic project for chatbot development and AI integration.
 
 ---
 
-**Last Updated**: February 21, 2026
+**Last Updated**: March 14, 2026

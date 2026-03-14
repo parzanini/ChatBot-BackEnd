@@ -113,12 +113,46 @@ class KnowledgeStore:
             print(f"Error checking if source exists: {str(error)}")
             return False
 
-    def delete_by_source(self, source_type=None):
+    def delete_manual_upload_by_name(self, source_name=None):
         """
-        Delete all chunks from a specific source by source name.
+        Delete all chunks for one manually uploaded PDF.
 
         Args:
-            source_name: Name of the source (like "Student Handbook" or "TUS Homepage")
+            source_name: Name of the source to delete
+
+        Returns:
+            dict: {"deleted_count": number of chunks deleted}
+
+        Raises:
+            ValueError: If required values are missing
+        """
+        try:
+            # PDF name needs to match
+            if not source_name:
+                error_msg = "Must provide source_name"
+                print(f"Error: {error_msg}")
+                raise ValueError(error_msg)
+
+            # Hardcode Manual Upload so this helper can only remove manual uploads
+            print(f"Deleting manual upload chunks for source '{source_name}'")
+            deleted = KnowledgeChunk.objects(
+                sourceType="Manual Upload",
+                sourceName=source_name
+            ).delete()
+
+            print(f"Successfully deleted {deleted} chunks")
+            return {"deleted_count": deleted}
+        except Exception as error:
+            error_msg = f"Failed to delete chunks: {str(error)}"
+            print(f"Error: {error_msg}")
+            raise Exception(error_msg)
+
+    def delete_by_source(self, source_type=None):
+        """
+        Delete all chunks from a specific source type.
+
+        Args:
+            source_type: Type of source (like "pdf" or "website")
 
         Returns:
             dict: {"deleted_count": number of chunks deleted}
@@ -131,7 +165,7 @@ class KnowledgeStore:
                 print(f"Deleting chunks for source: {source_type}")
                 deleted = KnowledgeChunk.objects(sourceType=source_type).delete()
             else:
-                error_msg = "Must provide source_name"
+                error_msg = "Must provide source_type"
                 print(f"Error: {error_msg}")
                 raise ValueError(error_msg)
 

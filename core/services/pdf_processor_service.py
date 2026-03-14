@@ -24,8 +24,6 @@ class PDFProcessorService:
     def __init__(self):
         """
         Set up the PDF processor.
-
-        This creates the helper components we need.
         """
         # Create a chunker to split text
         self.chunker = Chunker()

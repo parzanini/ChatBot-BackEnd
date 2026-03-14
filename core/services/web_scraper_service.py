@@ -318,6 +318,7 @@ def extract_and_process_links():
     error_count = 0
 
     for idx, course_url in enumerate(sorted_links, 1):
+        # idx is the current index (starting from 1), len(sorted_links) is the total number of links
         print(f"\n[{idx}/{len(sorted_links)}] {course_url}")
         status_code, response = process_course_page(course_url)
 

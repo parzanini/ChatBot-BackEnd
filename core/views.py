@@ -16,7 +16,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import Group, User
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST, require_GET
+from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from mongoengine.connection import get_db
 
 from core import config
@@ -396,7 +396,7 @@ def upload_pdf(request):
     print(f"Checking if source '{source_name}' already exists...")
     knowledge_store = KnowledgeStore()
 
-    if knowledge_store.source_exists(source_type="pdf", source_name=source_name):
+    if knowledge_store.source_exists(source_type="Manual Upload", source_name=source_name):
         error_msg = f"A source with the name '{source_name}' already exists. Please use a different name or delete the existing source first."
         print(f"Warning: {error_msg}")
         return JsonResponse({
@@ -658,15 +658,33 @@ def keep_alive(request):
 @csrf_exempt
 @require_GET
 def index_database_runs(request):
-    """Return the latest 20 index_database run results."""
+    """
+    API Endpoint: Get the last 20 index_database run results.
+
+    This returns a history of the last 20 times the index_database
+    endpoint was called, including whether each run succeeded and
+    what happened (pages scraped, PDFs processed, time taken, etc.).
+
+    How to use (example):
+        GET /api/index_database_runs/
+
+    Returns:
+        JSON list of up to 20 run records, newest first.
+    """
     try:
+        # STEP 1: Fetch the 20 most recent runs from the database, newest first
         latest_runs = IndexDatabaseRun.objects.order_by("-created_at")[:20]
 
+        # STEP 2: Build a clean list from the database records
         results = []
         for run in latest_runs:
+            # Make sure payload is a dictionary; fall back to empty dict if not
             run_payload = run.payload if isinstance(run.payload, dict) else {}
+
+            # Convert the date to a string so JSON can include it
             created_at_value = run.created_at.isoformat() if run.created_at else None
 
+            # Pull each useful field out of the stored payload
             results.append(
                 {
                     "id": run.id,
@@ -681,89 +699,185 @@ def index_database_runs(request):
                     "pdfs_failed": run_payload.get("pdfs_failed"),
                     "total_pdfs": run_payload.get("total_pdfs"),
                     "processing_time_minutes": run_payload.get("processing_time_minutes"),
-                    "payload": run_payload,
+                    "payload": run_payload,  # Include the full raw payload as well
                 }
             )
 
+        # STEP 3: Return the list with a count of how many records are included
         return JsonResponse({"success": True, "results": results, "count": len(results)}, status=200)
 
     except Exception as error:
+        # Something went wrong reading from the database
         error_message = "Failed to fetch index database run history."
         return JsonResponse({"success": False, "error": error_message, "details": str(error)}, status=500)
 
 
 @csrf_exempt
-@require_GET
+@require_http_methods(["GET", "DELETE"])
 def manual_uploads(request):
-    """Return all manually uploaded PDF sources grouped by source name."""
+    """
+    API Endpoint: Get or delete manually uploaded PDF documents.
+
+    GET:
+        Returns every PDF that was uploaded through the upload_pdf endpoint.
+        Each entry is grouped by document name so each PDF appears once,
+        along with the date it was uploaded and how many chunks it was split into.
+
+    DELETE:
+        Deletes one manually uploaded PDF by its source_name.
+
+    How to use (example):
+        GET /api/manual_uploads/
+        DELETE /api/manual_uploads/
+        JSON body: {"source_name": "Student Handbook 2025"}
+
+    Returns:
+        GET: JSON list of uploaded documents with name, date, file type, and chunk count.
+        DELETE: JSON success message with how many chunks were removed.
+    """
     try:
+        # STEP 1: If this is a DELETE request, remove one manual upload by name
+        if request.method == "DELETE":
+            # Read the JSON body sent by the client
+            try:
+                payload = json.loads(request.body.decode("utf-8"))
+            except Exception:
+                return JsonResponse({"success": False, "error": "Invalid JSON body."}, status=400)
+
+            # Get the PDF name to delete
+            source_name = str(payload.get("source_name", "")).strip()
+
+            # Make sure a source name was provided
+            if not source_name:
+                return JsonResponse({"success": False, "error": "source_name is required."}, status=400)
+
+            # Delete only chunks that came from manual uploads with this exact name
+            delete_result = KnowledgeStore().delete_manual_upload_by_name(source_name=source_name)
+            deleted_count = int(delete_result.get("deleted_count", 0))
+
+            # If nothing was deleted, the document was not found
+            if deleted_count == 0:
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": f"No manually uploaded PDF found with source_name '{source_name}'."
+                    },
+                    status=404,
+                )
+
+            # Return success details so the UI can refresh the table
+            return JsonResponse(
+                {
+                    "success": True,
+                    "message": "Manual uploaded PDF deleted successfully.",
+                    "source_name": source_name,
+                    "deleted_chunks": deleted_count,
+                },
+                status=200,
+            )
+
+        # STEP 2: Connect to MongoDB and check the collection exists
         database = get_db()
         collection_names = database.list_collection_names()
 
+        # If the collection doesn't exist yet, return an empty list straight away
         if config.MONGODB_COLLECTION not in collection_names:
             return JsonResponse({"success": True, "documents": [], "count": 0}, status=200)
 
+        # Get the collection we store knowledge chunks in
         collection = database[config.MONGODB_COLLECTION]
 
+        # STEP 3: Build a MongoDB aggregation pipeline to group chunks by PDF name
+        # This gives us one row per PDF instead of one row per chunk
         pipeline = [
+            # Only look at chunks that came from a manual PDF upload
             {"$match": {"sourceType": "Manual Upload"}},
             {
+                # Group by source name (the PDF file name)
+                # Count how many chunks belong to it and find the earliest creation date
                 "$group": {
                     "_id": "$sourceName",
                     "chunks_count": {"$sum": 1},
                     "upload_date": {"$min": "$createdAt"},
                 }
             },
+            # Sort newest uploads first; if same date, sort alphabetically by name
             {"$sort": {"upload_date": -1, "_id": 1}},
         ]
 
+        # STEP 4: Run the pipeline and collect the results
         grouped_documents = list(collection.aggregate(pipeline))
         documents = []
 
         for item in grouped_documents:
+            # Convert the date object to a string for the JSON response
             upload_date = item.get("upload_date")
             upload_date_value = upload_date.isoformat() if hasattr(upload_date, "isoformat") else None
+
+            # Use empty string if the source name is missing
             source_name = item.get("_id") or ""
 
+            # Build the document entry for this PDF
             documents.append(
                 {
                     "document_name": source_name,
                     "source_name": source_name,
                     "upload_date": upload_date_value,
                     "file_type": "pdf",
-                    "file_size": None,
+                    "file_size": None,  # File size is not stored in the chunks collection
                     "chunks_count": int(item.get("chunks_count", 0)),
                 }
             )
 
+        # STEP 5: Return the list of documents
         return JsonResponse({"success": True, "documents": documents, "count": len(documents)}, status=200)
 
     except Exception as error:
+        # Something went wrong querying MongoDB
         error_message = "Failed to fetch manual uploaded PDFs."
         return JsonResponse({"success": False, "error": error_message, "details": str(error)}, status=500)
 
 @csrf_exempt
 @require_POST
 def register(request):
+    """
+    API Endpoint: Register a new user.
+
+    Creates a new user account with the given email, name, and password.
+    The new user is automatically assigned the USER role.
+
+    How to use (example):
+        POST /api/register/
+        JSON body: {"email": "user@example.com", "name": "John", "surname": "Doe", "password": "secret123"}
+
+    Returns:
+        JSON with the new user's details on success, or an error message.
+    """
+    # STEP 1: Parse the JSON body
     try:
         payload = json.loads(request.body.decode("utf-8"))
     except Exception:
         return JsonResponse({"error": "Invalid JSON body."}, status=400)
 
+    # STEP 2: Read the fields from the request
     email = str(payload.get("email", "")).strip().lower()
     name = str(payload.get("name", "")).strip()
     surname = str(payload.get("surname", "")).strip()
     password = str(payload.get("password", ""))
 
+    # STEP 3: Validate that required fields are present
     if not email or not password:
         return JsonResponse({"error": "email and password are required."}, status=400)
 
+    # Make sure the password is at least 6 characters long
     if len(password) < 6:
         return JsonResponse({"error": "password must have at least 6 characters."}, status=400)
 
+    # STEP 4: Make sure the email is not already taken
     if User.objects.filter(email__iexact=email).exists() or User.objects.filter(username__iexact=email).exists():
         return JsonResponse({"error": "email is already in use."}, status=409)
 
+    # STEP 5: Create the user in the database
     user = User.objects.create_user(
         username=email,
         email=email,
@@ -772,9 +886,11 @@ def register(request):
         last_name=surname,
     )
 
+    # STEP 6: Add the user to the USER group (role)
     user_group, _ = Group.objects.get_or_create(name=USER_ROLE)
     user.groups.add(user_group)
 
+    # STEP 7: Return the new user's details
     return JsonResponse(
         {
             "success": True,
@@ -793,31 +909,53 @@ def register(request):
 @csrf_exempt
 @require_POST
 def login(request):
+    """
+    API Endpoint: Log in a user.
+
+    Checks the email and password, creates a new auth token, and returns it.
+    The token must be included in the Authorization header for protected requests.
+
+    How to use (example):
+        POST /api/login/
+        JSON body: {"email": "user@example.com", "password": "secret123"}
+
+    Returns:
+        JSON with the auth token and user details on success, or an error message.
+    """
+    # STEP 1: Parse the JSON body
     try:
         payload = json.loads(request.body.decode("utf-8"))
     except Exception:
         return JsonResponse({"error": "Invalid JSON body."}, status=400)
 
+    # STEP 2: Read the email and password from the request
     email = str(payload.get("email", "")).strip().lower()
     password = str(payload.get("password", ""))
 
+    # STEP 3: Make sure both fields were provided
     if not email or not password:
         return JsonResponse({"error": "email and password are required."}, status=400)
 
+    # STEP 4: Look up the user by their email address
     user_by_email = User.objects.filter(email__iexact=email).first()
 
+    # No account found with that email
     if not user_by_email:
         return JsonResponse({"error": "Invalid credentials."}, status=401)
 
+    # STEP 5: Check that the password is correct
     authenticated_user = authenticate(request, username=user_by_email.username, password=password)
     if not authenticated_user:
         return JsonResponse({"error": "Invalid credentials."}, status=401)
 
+    # STEP 6: Find out what role this user has (ADMIN or USER)
     role = ADMIN_ROLE if authenticated_user.groups.filter(name=ADMIN_ROLE).exists() else USER_ROLE
 
+    # STEP 7: Delete any existing tokens for this user and create a fresh one
     AuthToken.objects.filter(user=authenticated_user).delete()
     token = AuthToken.objects.create(user=authenticated_user)
 
+    # STEP 8: Return the token and user details
     return JsonResponse(
         {
             "success": True,
@@ -836,16 +974,39 @@ def login(request):
 @csrf_exempt
 @require_POST
 def logout(request):
+    """
+    API Endpoint: Log out a user.
+
+    Deletes the user's auth token so it can no longer be used.
+    The token must be sent in the Authorization header as "Bearer <token>".
+
+    How to use (example):
+        POST /api/logout/
+        Header: Authorization: Bearer <your-token>
+
+    Returns:
+        JSON success message, or an error if the token is missing or invalid.
+    """
+    # STEP 1: Read the Authorization header from the request
     authorization = request.headers.get("Authorization", "")
+
+    # The header must start with "Bearer " followed by the token
     if not authorization.startswith("Bearer "):
         return JsonResponse({"error": "Missing or invalid Authorization header."}, status=401)
 
+    # STEP 2: Extract the token value after "Bearer "
     token_key = authorization.split(" ", 1)[1].strip()
+
+    # Make sure the token is not empty
     if not token_key:
         return JsonResponse({"error": "Missing token."}, status=401)
 
+    # STEP 3: Delete the token from the database
     deleted_count, _ = AuthToken.objects.filter(key=token_key).delete()
+
+    # If nothing was deleted the token was already invalid or expired
     if deleted_count == 0:
         return JsonResponse({"error": "Invalid token."}, status=401)
 
+    # STEP 4: Return success confirmation
     return JsonResponse({"success": True, "message": "Logged out successfully."}, status=200)

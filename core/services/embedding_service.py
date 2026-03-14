@@ -21,7 +21,7 @@ class EmbeddingService:
         What it does:
         1. Takes text as input
         2. Calls Google's AI to convert it to numbers
-        3. Saves the result in memory so we don't need to call the API again
+        3. Saves the result in memory so api does not need to be called again
         4. Returns the numbers
         """
 
@@ -41,7 +41,7 @@ class EmbeddingService:
         Convert one piece of text into an embedding (list of numbers).
 
         Steps:
-        1. Check if we already processed this text (cache)
+        1. Check if text was already processed
         2. If yes, return the saved result
         3. If no, call Google's AI to convert it
         4. Save the result for next time
@@ -49,7 +49,7 @@ class EmbeddingService:
 
         Args:
             text: The text to convert
-            task_type: What we're using this for (usually "retrieval_document")
+            task_type: retrieval_document
 
         Returns:
             A list of numbers (the embedding)
